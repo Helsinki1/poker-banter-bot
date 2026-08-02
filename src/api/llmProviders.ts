@@ -27,12 +27,43 @@ export interface LlmModelOption {
    * is silence at the table. Flagged so the UI can warn.
    */
   reasoning: boolean;
+  /**
+   * Windows this model actually accepts. Sail rejects a mismatch with a 400
+   * ("this model supports: flex"), so the request must use a supported tier
+   * rather than assuming `asap` is universal. Verified per-model against the
+   * live API. Omitted for OpenAI, which has no such concept.
+   */
+  windows?: CompletionWindow[];
+  /**
+   * What to pass as `reasoning_effort`. Sail's models are all reasoning models
+   * and will happily spend a whole 1024-token budget deliberating and emit no
+   * spoken text at all (measured: Kimi burned 1598 reasoning tokens in 49s for
+   * one 13-word line). Turning reasoning off takes Kimi from ~26-49s to ~1.4s,
+   * which is the difference between usable at a poker table and not. Models
+   * that reject `none` name their supported values in the 400; verified live.
+   */
+  reasoningEffort?: 'none' | 'low' | 'medium' | 'high';
   /** Rough note shown as the option's title attribute. */
   note?: string;
 }
 
 export const OPENAI_BASE_URL = 'https://api.openai.com/v1';
-export const SAIL_BASE_URL = 'https://api.sailresearch.com/v1';
+export const SAIL_DIRECT_BASE_URL = 'https://api.sailresearch.com/v1';
+/**
+ * Sail sends no Access-Control-Allow-Origin header, so a direct browser fetch
+ * is blocked by CORS. In dev we go through the Vite proxy (see vite.config.ts),
+ * which makes the call server-side where CORS does not apply. A production
+ * build would need an equivalent proxy of its own.
+ *
+ * The origin prefix is required, not cosmetic: the OpenAI SDK builds request
+ * URLs with `new URL(...)`, which throws `Invalid URL` on a bare path — and
+ * `streamBanterLine` catches that, so every line would silently fall back to
+ * the scripted script with no network call at all.
+ */
+export const SAIL_PROXY_BASE_URL = `${
+  typeof window === 'undefined' ? 'http://localhost' : window.location.origin
+}/sail/v1`;
+export const SAIL_BASE_URL = import.meta.env.DEV ? SAIL_PROXY_BASE_URL : SAIL_DIRECT_BASE_URL;
 
 /**
  * Selectable backends. Sail model ids are verified against
@@ -62,7 +93,9 @@ export const LLM_MODEL_OPTIONS: LlmModelOption[] = [
     provider: 'sail',
     model: 'moonshotai/Kimi-K2.6',
     reasoning: true,
-    note: 'Reasoning model on a throughput-optimised backend — expect a slower first word.',
+    windows: ['asap', 'priority', 'standard', 'flex'],
+    reasoningEffort: 'none',
+    note: 'Reasoning disabled for speed (~1.4s). Leaving it on costs 26-49s per line.',
   },
   {
     id: 'sail-glm-5.2',
@@ -70,7 +103,9 @@ export const LLM_MODEL_OPTIONS: LlmModelOption[] = [
     provider: 'sail',
     model: 'zai-org/GLM-5.2-FP8',
     reasoning: true,
-    note: 'Reasoning model; 1M context. Slower first word than GPT.',
+    windows: ['asap', 'priority', 'standard', 'flex'],
+    reasoningEffort: 'none',
+    note: 'Reasoning disabled for speed (~1.0s measured).',
   },
   {
     id: 'sail-gpt-oss-120b',
@@ -78,7 +113,10 @@ export const LLM_MODEL_OPTIONS: LlmModelOption[] = [
     provider: 'sail',
     model: 'openai/gpt-oss-120b',
     reasoning: true,
-    note: 'Only 5.1B active params — usually the quickest Sail option.',
+    windows: ['asap', 'priority', 'standard', 'flex'],
+    // Rejects `none` ("supported: low, medium, high"), verified live.
+    reasoningEffort: 'low',
+    note: 'Only 5.1B active params, but cannot disable reasoning — slower than Kimi here.',
   },
   {
     id: 'sail-qwen3.6-35b',
@@ -86,6 +124,8 @@ export const LLM_MODEL_OPTIONS: LlmModelOption[] = [
     provider: 'sail',
     model: 'Qwen/Qwen3.6-35B-A3B',
     reasoning: true,
+    // Verified against the live API: this model rejects `asap`.
+    windows: ['flex'],
     note: '3B active params — the other comparatively quick Sail option.',
   },
   {
@@ -94,6 +134,9 @@ export const LLM_MODEL_OPTIONS: LlmModelOption[] = [
     provider: 'sail',
     model: 'google/gemma-4-31B-it',
     reasoning: true,
+    windows: ['asap', 'priority', 'standard', 'flex'],
+    reasoningEffort: 'none',
+    note: 'Reasoning disabled, but still ~8.6s measured — too slow for live banter.',
   },
   {
     id: 'sail-nemotron-3-super',
@@ -101,6 +144,8 @@ export const LLM_MODEL_OPTIONS: LlmModelOption[] = [
     provider: 'sail',
     model: 'nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16',
     reasoning: true,
+    // Verified against the live API: this model rejects `asap`.
+    windows: ['flex'],
   },
 ];
 
@@ -148,6 +193,23 @@ export function apiKeyFor(model: LlmModelOption): string {
 
 export function baseUrlFor(model: LlmModelOption): string {
   return model.provider === 'sail' ? SAIL_BASE_URL : OPENAI_BASE_URL;
+}
+
+/**
+ * The fastest window this model accepts, preferring `preferred` when allowed.
+ * Sending an unsupported tier is a hard 400, so this must be honoured rather
+ * than defaulting to `asap` everywhere.
+ */
+export function resolveWindow(
+  model: LlmModelOption,
+  preferred: CompletionWindow,
+): CompletionWindow {
+  const allowed = model.windows;
+  if (!allowed || allowed.length === 0) return preferred;
+  if (allowed.includes(preferred)) return preferred;
+  // Fall back to the quickest tier the model does support.
+  const bySpeed: CompletionWindow[] = ['asap', 'priority', 'standard', 'flex'];
+  return bySpeed.find((w) => allowed.includes(w)) ?? allowed[0];
 }
 
 /** True when the selected backend has a key configured. */

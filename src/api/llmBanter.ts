@@ -10,6 +10,7 @@ import {
   baseUrlFor,
   findModel,
   loadSelectedModelId,
+  resolveWindow,
 } from './llmProviders';
 
 // LLM-generated table talk. Produces ONE short in-character line per trigger.
@@ -28,8 +29,13 @@ export { getOpenAiApiKey } from './llmProviders';
 // ceiling bounds the worst case when the model ignores that.
 const MAX_TOKENS = 60;
 
-/** Reasoning models burn tokens before speaking; they need room for both. */
-const REASONING_MAX_TOKENS = 1_024;
+/**
+ * Reasoning models burn tokens before speaking; they need room for both, or
+ * the budget runs out mid-deliberation and the line comes back empty. Measured
+ * on Kimi: 1598 reasoning tokens for a 13-word line at default effort, 592 at
+ * `low`. Models with reasoning switched off never get near this.
+ */
+const REASONING_MAX_TOKENS = 4_096;
 
 /**
  * Sail tier for live banter. Only `asap` is usable: `priority` averages ~1
@@ -67,7 +73,10 @@ function getClient(model: LlmModelOption, apiKey: string): OpenAI {
       baseURL,
       dangerouslyAllowBrowser: true,
       maxRetries: 0,
-      timeout: model.provider === 'sail' ? 20_000 : 8_000,
+      // Measured: Kimi K2.6 on `asap` takes 16-32s to its first spoken token,
+      // so a 20s ceiling cut off valid replies. This is generous enough to let
+      // one through; the scripted line covers whatever still times out.
+      timeout: model.provider === 'sail' ? 45_000 : 8_000,
     });
     clients.set(baseURL, client);
   }
@@ -229,14 +238,20 @@ export async function* streamBanterLine(
       // A reasoning model spends tokens thinking before it writes anything. At
       // MAX_TOKENS the whole budget can go to reasoning and produce an empty
       // line, so give it headroom — the prompt still caps the spoken line, and
-      // the streaming loop enforces its own 240-char ceiling.
-      max_completion_tokens: model.reasoning ? REASONING_MAX_TOKENS : MAX_TOKENS,
+      // the streaming loop enforces its own 240-char ceiling. Once reasoning is
+      // switched off entirely the tight ceiling is safe again.
+      max_completion_tokens:
+        model.reasoning && model.reasoningEffort !== 'none' ? REASONING_MAX_TOKENS : MAX_TOKENS,
       stream: true,
       messages: buildMessages(characterName, voice, trigger, memory, snapshot),
       // Sail routes by service tier; `asap` is the only conversational one.
       ...(model.provider === 'sail'
-        ? { metadata: { completion_window: SAIL_WINDOW } }
+        ? { metadata: { completion_window: resolveWindow(model, SAIL_WINDOW) } }
         : {}),
+      // Reasoning is the whole latency story on Sail. Left on, Kimi spends the
+      // entire token budget deliberating (often emitting NO spoken line at all,
+      // 26-49s); off, the same line arrives in ~1.4s.
+      ...(model.reasoningEffort ? { reasoning_effort: model.reasoningEffort } : {}),
     }, { signal });
   } catch {
     return; // scripted lines carry the conversation

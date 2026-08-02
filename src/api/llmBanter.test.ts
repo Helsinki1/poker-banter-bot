@@ -86,9 +86,31 @@ describe('streamBanterLine backend selection', () => {
     expect(line).not.toContain('mock their folding');
   });
 
-  it('gives reasoning models room to think without truncating the line', async () => {
-    created.mockReturnValue(textDeltas('Hm.'));
+  it('turns reasoning off where the model allows it', async () => {
+    // This is the single biggest latency lever on Sail: measured live, Kimi
+    // takes 26-49s with reasoning on (and sometimes spends the whole budget
+    // thinking and returns NO line at all) versus ~1.4s with it off.
+    created.mockReturnValue(textDeltas('Scared money never wins.'));
     await collect('sail-kimi-k2.6');
+    expect(created.mock.calls[0][0].reasoning_effort).toBe('none');
+  });
+
+  it('does not send reasoning_effort to OpenAI models that have no such setting', async () => {
+    created.mockReturnValue(textDeltas('Nice try.'));
+    await collect('gpt-4.1-mini');
+    expect(created.mock.calls[0][0].reasoning_effort).toBeUndefined();
+  });
+
+  it('asks for the effort level a model actually supports', async () => {
+    // gpt-oss-120b 400s on `none` ("supported: low, medium, high").
+    created.mockReturnValue(textDeltas('Hm.'));
+    await collect('sail-gpt-oss-120b');
+    expect(created.mock.calls[0][0].reasoning_effort).toBe('low');
+  });
+
+  it('gives still-reasoning models room to think without truncating the line', async () => {
+    created.mockReturnValue(textDeltas('Hm.'));
+    await collect('sail-gpt-oss-120b');
     const reasoningBudget = created.mock.calls[0][0].max_completion_tokens;
     created.mockReset();
     created.mockReturnValue(textDeltas('Hm.'));
