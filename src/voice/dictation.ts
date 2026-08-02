@@ -57,6 +57,8 @@ export class DictationAdapter {
   private events: DictationEvents;
   private status: DictationStatus;
   private wantListening = false;
+  /** Consecutive failures without a single result — breaks the restart loop. */
+  private consecutiveErrors = 0;
 
   constructor(events: DictationEvents) {
     this.events = events;
@@ -88,6 +90,7 @@ export class DictationAdapter {
     rec.interimResults = true;
     rec.onstart = () => this.setStatus('listening');
     rec.onresult = (e) => {
+      this.consecutiveErrors = 0;
       let interim = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const res = e.results[i];
@@ -107,7 +110,22 @@ export class DictationAdapter {
         this.events.onError('Microphone permission was denied. You can retry, or use the text box.', true);
       } else if (e.error === 'no-speech' || e.error === 'aborted') {
         // benign — continuous mode restarts via onend
+      } else if (e.error === 'network') {
+        // Chrome's cloud speech service is unreachable (common on Linux
+        // builds). Retrying just flickers the mic forever — stop after two
+        // failures and let the caller fall back to another input mode.
+        this.consecutiveErrors++;
+        if (this.consecutiveErrors >= 2) {
+          this.wantListening = false;
+          this.setStatus('error');
+          this.events.onError(
+            "Your browser's speech service is unavailable (network error). Switching to the text box — the game continues.",
+            false,
+          );
+        }
       } else {
+        this.consecutiveErrors++;
+        if (this.consecutiveErrors >= 3) this.wantListening = false;
         this.setStatus('error');
         this.events.onError(`Speech recognition error: ${e.error}. The game continues — try again or type instead.`, true);
       }

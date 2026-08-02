@@ -4,7 +4,19 @@ import type { ConversationError, NpcConversationState } from '../api/conversatio
 import { toPublicSnapshot } from '../api/conversationClient';
 import { MockRealtimeConversationClient } from '../api/mockConversationClient';
 import { DictationAdapter, isDictationSupported, type DictationStatus } from '../voice/dictation';
+import { CartesiaSttAdapter, isCartesiaSttAvailable } from '../voice/cartesiaStt';
 import { CartesiaVoicePlayer, type NpcVoice } from '../voice/cartesiaTts';
+
+/** Each table character speaks with a default voice; the dropdown can override. */
+const CHARACTER_DEFAULT_VOICE: Record<OpponentId, NpcVoice> = {
+  einstein: 'normal',
+  lebron: 'lebron',
+  trump: 'trump',
+};
+
+function anySpeechInputAvailable(): boolean {
+  return isCartesiaSttAvailable() || isDictationSupported();
+}
 
 // Conversation-side coordinator. Owns the realtime client, the browser
 // dictation adapter and NPC audio playback. Receives ONLY public game
@@ -49,19 +61,19 @@ export function useConversation(
   snapshot: GameSnapshot | null,
 ): ConversationController {
   const clientRef = useRef<MockRealtimeConversationClient | null>(null);
-  const dictationRef = useRef<DictationAdapter | null>(null);
+  const dictationRef = useRef<DictationAdapter | CartesiaSttAdapter | null>(null);
   const ttsRef = useRef<CartesiaVoicePlayer | null>(null);
   /** Latest transcript event withheld while Cartesia paces the subtitle. */
   const pendingTranscriptRef = useRef<{ responseId?: string; text: string; final: boolean } | null>(null);
 
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [npcState, setNpcState] = useState<NpcConversationState>('disconnected');
-  const [micMode, setMicModeState] = useState<MicMode>(isDictationSupported() ? 'open' : 'text-only');
+  const [micMode, setMicModeState] = useState<MicMode>(anySpeechInputAvailable() ? 'open' : 'text-only');
   const [micActive, setMicActive] = useState(false);
   const [micMuted, setMicMutedState] = useState(false);
   const [npcAudioMuted, setNpcAudioMutedState] = useState(false);
   const [dictationStatus, setDictationStatus] = useState<DictationStatus>(
-    isDictationSupported() ? 'idle' : 'unsupported',
+    anySpeechInputAvailable() ? 'idle' : 'unsupported',
   );
   const [playerInterim, setPlayerInterim] = useState('');
   const [playerFinal, setPlayerFinal] = useState('');
@@ -71,13 +83,15 @@ export function useConversation(
   const [npcVoice, setNpcVoiceState] = useState<NpcVoice>(() => {
     try {
       const saved = localStorage.getItem('npc-voice');
-      if (saved === 'normal' || saved === 'lebron' || saved === 'trump' || saved === 'flight') return saved;
+      if (saved === 'normal' || saved === 'lebron' || saved === 'trump') return saved;
     } catch { /* private mode */ }
     return 'normal';
   });
   const interimClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const dictationSupported = useMemo(() => isDictationSupported(), []);
+  const dictationSupported = useMemo(() => anySpeechInputAvailable(), []);
+  const npcVoiceRef = useRef(npcVoice);
+  npcVoiceRef.current = npcVoice;
 
   // NPC voice player (stable across renders). Cartesia MP3 at 1.1x when a
   // key is configured; speechSynthesis fallback otherwise.
@@ -109,6 +123,7 @@ export function useConversation(
   useEffect(() => {
     if (!voiceEnabled || !opponentId) return;
     const client = new MockRealtimeConversationClient({ seed: Date.now() & 0xffff });
+    client.setNpcVoice(npcVoiceRef.current);
     clientRef.current = client;
     const subs = [
       client.onNpcStateChange(setNpcState),
@@ -147,6 +162,17 @@ export function useConversation(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [voiceEnabled, opponentId]);
 
+  // Sitting down with a character auto-selects their voice + banter persona
+  // (the dropdown still overrides it afterwards).
+  useEffect(() => {
+    if (!opponentId) return;
+    const voice = CHARACTER_DEFAULT_VOICE[opponentId];
+    setNpcVoiceState(voice);
+    ttsRef.current?.setVoice(voice);
+    clientRef.current?.setNpcVoice(voice);
+    try { localStorage.setItem('npc-voice', voice); } catch { /* private mode */ }
+  }, [opponentId]);
+
   // Keep the NPC's public game context fresh; stale responses get cancelled inside the client.
   useEffect(() => {
     if (snapshot && clientRef.current) {
@@ -168,13 +194,13 @@ export function useConversation(
       return;
     }
     if (dictationRef.current) return;
-    const adapter = new DictationAdapter({
-      onStatus: (s) => {
+    const events = {
+      onStatus: (s: DictationStatus) => {
         setDictationStatus(s);
         setMicActive(s === 'listening' || s === 'starting');
         if (s === 'permission-denied') setMicActive(false);
       },
-      onInterim: (text) => {
+      onInterim: (text: string) => {
         // Barge-in: the player starting to speak interrupts the NPC.
         if (npcStateRef.current === 'speaking') {
           clientRef.current?.interruptNpc();
@@ -187,14 +213,26 @@ export function useConversation(
         if (interimClearRef.current) clearTimeout(interimClearRef.current);
         interimClearRef.current = setTimeout(() => setPlayerInterim(''), 4000);
       },
-      onFinal: (text) => {
+      onFinal: (text: string) => {
         clientRef.current?.sendPlayerUtterance(text);
         setPlayerInterim('');
       },
-      onError: (message, recoverable) => {
+      onError: (message: string, recoverable: boolean) => {
         setError({ recoverable, message, code: 'transcription-failed' });
+        if (!recoverable) {
+          // Speech input is dead (e.g. Chrome's speech service unreachable):
+          // stop the retry flicker and drop cleanly to the text box.
+          dictationRef.current?.stop();
+          dictationRef.current = null;
+          setMicActive(false);
+          clientRef.current?.setMicrophoneEnabled(false);
+          setMicModeState('text-only');
+        }
       },
-    });
+    };
+    // Prefer Cartesia streaming STT (works everywhere a mic does); the
+    // browser's SpeechRecognition is the no-key fallback.
+    const adapter = isCartesiaSttAvailable() ? new CartesiaSttAdapter(events) : new DictationAdapter(events);
     dictationRef.current = adapter;
     adapter.start();
     clientRef.current?.setMicrophoneEnabled(true);
@@ -269,6 +307,7 @@ export function useConversation(
   const setNpcVoice = useCallback((voice: NpcVoice) => {
     setNpcVoiceState(voice);
     ttsRef.current?.setVoice(voice);
+    clientRef.current?.setNpcVoice(voice);
     try { localStorage.setItem('npc-voice', voice); } catch { /* private mode */ }
   }, []);
 

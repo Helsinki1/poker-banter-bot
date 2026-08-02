@@ -15,7 +15,7 @@ const MODEL_ID = 'sonic-2';
 const PLAYBACK_RATE = 1.1;
 const VOICE_ID_CACHE_KEY = 'cartesia-voice-ids-v1';
 
-export type NpcVoice = 'normal' | 'lebron' | 'trump' | 'flight';
+export type NpcVoice = 'normal' | 'lebron' | 'trump';
 
 export interface NpcVoiceOption {
   id: NpcVoice;
@@ -25,10 +25,10 @@ export interface NpcVoiceOption {
 }
 
 export const NPC_VOICE_OPTIONS: NpcVoiceOption[] = [
-  { id: 'normal', label: 'Normal (Daniel)', libraryNames: ['Daniel (Modern Assistant)', 'Daniel'] },
-  { id: 'lebron', label: 'Lebron James', libraryNames: ['Lebron James'] },
-  { id: 'trump', label: 'Donald Trump', libraryNames: ['Donald Trump'] },
-  { id: 'flight', label: 'Flight Reacts', libraryNames: ['Flight Reacts 2'] },
+  { id: 'normal', label: 'Normal (Daniel)', libraryNames: ['Daniel - Modern Assistant', 'Daniel (Modern Assistant)', 'Daniel'] },
+  { id: 'lebron', label: 'Lebron James', libraryNames: ['Lebron James', 'Lebron'] },
+  // The library entry is literally named "Trump" — keep both spellings.
+  { id: 'trump', label: 'Donald Trump', libraryNames: ['Donald Trump', 'Trump'] },
 ];
 
 export function getCartesiaApiKey(): string {
