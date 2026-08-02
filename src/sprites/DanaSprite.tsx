@@ -27,7 +27,7 @@ const CARD = '#6b1f24';
 const CARD_SH = '#4a1519';
 const TRIM = '#e8d9b0';
 const CHIP_BLUE = '#274a68';
-const HEART = '#e07a9a';
+const STAR = '#f5d06b';
 const TABLE = '#23272b';
 const TABLE_HI = '#2f353a';
 const CHAIR = '#2c3236';
@@ -226,17 +226,21 @@ const MOUTH_2: readonly Px[] = [
   [44, 35, 8, 1, LIP],
 ];
 
-const FX_HEARTS: readonly Px[] = [
-  [65, 7, 2, 2, HEART],
-  [68, 7, 2, 2, HEART],
-  [65, 9, 5, 2, HEART],
-  [66, 11, 3, 1, HEART],
-  [67, 12, 1, 1, HEART],
-  [26, 24, 2, 2, HEART],
-  [29, 24, 2, 2, HEART],
-  [26, 26, 5, 2, HEART],
-  [27, 28, 3, 1, HEART],
-  [28, 29, 1, 1, HEART],
+// Two small 4-point sparkle stars where the hearts used to float (upper-right
+// and upper-left). Thin vertical + horizontal arms crossing, with a small
+// diamond center — concave gaps between the arms read as a twinkle, not a
+// solid spade/heart body.
+const FX_STARS: readonly Px[] = [
+  // upper-right star, center (67, 9)
+  [67, 6, 1, 7, STAR], // vertical arm
+  [64, 9, 7, 1, STAR], // horizontal arm
+  [66, 8, 3, 1, STAR], // center diamond
+  [66, 10, 3, 1, STAR],
+  // upper-left star, center (28, 26)
+  [28, 23, 1, 7, STAR],
+  [25, 26, 7, 1, STAR],
+  [27, 25, 3, 1, STAR],
+  [27, 27, 3, 1, STAR],
 ];
 
 const FX_SPARKS: readonly Px[] = [
@@ -302,7 +306,7 @@ export default function DanaSprite(props: OpponentSpriteProps): JSX.Element {
       <g className="dana-cards">{px(CARDS)}</g>
       <g className="dana-chips">{px(CHIPS)}</g>
       <g className="dana-fx">
-        <g className="dana-fx-hearts">{px(FX_HEARTS)}</g>
+        <g className="dana-fx-stars">{px(FX_STARS)}</g>
         <g className="dana-fx-sparks">{px(FX_SPARKS)}</g>
       </g>
     </svg>

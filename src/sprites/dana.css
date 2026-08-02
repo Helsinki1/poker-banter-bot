@@ -4,7 +4,7 @@
    Static posture rules live outside the media query so every mood is
    still visually differentiated when prefers-reduced-motion is set.
    Dana is warm and sweet: her resting face already smiles (it's the photo),
-   hearts float while she thinks, and her fold is an apologetic tilt. */
+   stars float while she thinks, and her fold is an apologetic tilt. */
 
 .px-dana {
   display: block;
@@ -31,18 +31,18 @@
 .px-dana .dana-mouth-smile {
   visibility: hidden;
 }
-.px-dana .dana-fx-hearts,
+.px-dana .dana-fx-stars,
 .px-dana .dana-fx-sparks {
   opacity: 0;
 }
 
 /* ---------- Static mood posture (motion-safe differentiation) ---------- */
 
-/* thinking: friendly lean, hearts appear */
+/* thinking: friendly lean, stars appear */
 .px-dana[data-mood='thinking'] .dana-head {
   transform: translate(1px, 1px) rotate(-1deg);
 }
-.px-dana[data-mood='thinking'] .dana-fx-hearts {
+.px-dana[data-mood='thinking'] .dana-fx-stars {
   opacity: 1;
 }
 
@@ -89,7 +89,7 @@
 .px-dana[data-mood='amused'] .dana-head {
   transform: translateY(-1px) rotate(1deg);
 }
-.px-dana[data-mood='celebrating'] .dana-fx-hearts,
+.px-dana[data-mood='celebrating'] .dana-fx-stars,
 .px-dana[data-mood='celebrating'] .dana-fx-sparks {
   opacity: 1;
 }
@@ -150,12 +150,12 @@
     animation: none;
   }
 
-  /* thinking: soft sway, hearts drift upward */
+  /* thinking: soft sway, stars drift upward */
   .px-dana[data-mood='thinking'] .dana-head {
     animation: danaSway 2.8s steps(2, end) infinite;
   }
-  .px-dana[data-mood='thinking'] .dana-fx-hearts {
-    animation: danaHeartDrift 2.4s steps(3, end) infinite;
+  .px-dana[data-mood='thinking'] .dana-fx-stars {
+    animation: danaStarDrift 2.4s steps(3, end) infinite;
   }
 
   /* speaking: mouth frames @ ~180ms, subtle head bob */
@@ -179,13 +179,13 @@
     animation: danaBounce 0.7s steps(2, end) infinite;
   }
 
-  /* celebrating: everything bounces, hearts + sparkles twinkle */
+  /* celebrating: everything bounces, stars + sparkles twinkle */
   .px-dana[data-mood='celebrating'] .dana-torso,
   .px-dana[data-mood='celebrating'] .dana-cards,
   .px-dana[data-mood='celebrating'] .dana-chips {
     animation: danaBounce 0.5s steps(2, end) infinite;
   }
-  .px-dana[data-mood='celebrating'] .dana-fx-hearts,
+  .px-dana[data-mood='celebrating'] .dana-fx-stars,
   .px-dana[data-mood='celebrating'] .dana-fx-sparks,
   .px-dana[data-mood='winning'] .dana-fx-sparks {
     animation: danaTwinkle 0.8s steps(2, end) infinite;
@@ -239,7 +239,7 @@
     0%, 100% { transform: translate(1px, 1px) rotate(-1deg); }
     50% { transform: translate(0, 1px) rotate(0deg); }
   }
-  @keyframes danaHeartDrift {
+  @keyframes danaStarDrift {
     0%, 100% { opacity: 0.45; transform: translateY(0); }
     50% { opacity: 1; transform: translateY(-2px); }
   }

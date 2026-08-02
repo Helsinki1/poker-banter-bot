@@ -3,14 +3,14 @@
 // Two providers, one wire format: both OpenAI and Sail Research speak the
 // OpenAI chat-completions protocol, so the only things that actually vary are
 // the base URL, the API key, the model id, and Sail's `completion_window`.
-// That makes the provider a runtime choice rather than a build-time one — you
+// That makes the provider a runtime choice rather than a build-time one, you
 // can switch models mid-match from the dock and hear the difference.
 //
 // The latency tradeoff is real and worth stating plainly: Sail's own docs say
 // it "optimizes for throughput and cost, not single-turn latency". The
 // streaming pipeline (chunker → Cartesia context) is identical either way, so
 // whichever backend is selected, first audio still starts on the first
-// fragment — but a slow first token is still dead air at the table.
+// fragment, but a slow first token is still dead air at the table.
 
 /** Sail's service tiers. Only `asap` is viable for live conversation. */
 export type CompletionWindow = 'asap' | 'priority' | 'standard' | 'flex';
@@ -56,7 +56,7 @@ export const SAIL_DIRECT_BASE_URL = 'https://api.sailresearch.com/v1';
  * build would need an equivalent proxy of its own.
  *
  * The origin prefix is required, not cosmetic: the OpenAI SDK builds request
- * URLs with `new URL(...)`, which throws `Invalid URL` on a bare path — and
+ * URLs with `new URL(...)`, which throws `Invalid URL` on a bare path, and
  * `streamBanterLine` catches that, so every line would silently fall back to
  * the scripted script with no network call at all.
  */
@@ -116,7 +116,7 @@ export const LLM_MODEL_OPTIONS: LlmModelOption[] = [
     windows: ['asap', 'priority', 'standard', 'flex'],
     // Rejects `none` ("supported: low, medium, high"), verified live.
     reasoningEffort: 'low',
-    note: 'Only 5.1B active params, but cannot disable reasoning — slower than Kimi here.',
+    note: 'Only 5.1B active params, but cannot disable reasoning, slower than Kimi here.',
   },
   {
     id: 'sail-qwen3.6-35b',
@@ -126,7 +126,7 @@ export const LLM_MODEL_OPTIONS: LlmModelOption[] = [
     reasoning: true,
     // Verified against the live API: this model rejects `asap`.
     windows: ['flex'],
-    note: '3B active params — the other comparatively quick Sail option.',
+    note: '3B active params, the other comparatively quick Sail option.',
   },
   {
     id: 'sail-gemma-4-31b',
@@ -136,7 +136,7 @@ export const LLM_MODEL_OPTIONS: LlmModelOption[] = [
     reasoning: true,
     windows: ['asap', 'priority', 'standard', 'flex'],
     reasoningEffort: 'none',
-    note: 'Reasoning disabled, but still ~8.6s measured — too slow for live banter.',
+    note: 'Reasoning disabled, but still ~8.6s measured, too slow for live banter.',
   },
   {
     id: 'sail-nemotron-3-super',
@@ -218,7 +218,7 @@ export function isModelUsable(model: LlmModelOption): boolean {
 }
 
 /**
- * Confirm which models the key can actually reach. Advisory only — a failure
+ * Confirm which models the key can actually reach. Advisory only, a failure
  * here never blocks generation, since the scripted lines always cover us.
  */
 export async function fetchSailModels(): Promise<string[]> {

@@ -126,12 +126,12 @@ export const SCENES: Record<string, SceneConfig> = {
   }),
   'player-interrupting': voiceScene({
     enabled: true, npcState: 'interrupted', micActive: true,
-    subtitle: { text: 'The odds of that river card were precisely—', final: true },
-    playerInterim: 'hold on, hold on—',
+    subtitle: { text: 'The odds of that river card were precisely…', final: true },
+    playerInterim: 'hold on, hold on…',
   }),
   'response-cancelled': voiceScene({
     enabled: true, npcState: 'connected', micActive: true, cancelled: true,
-    subtitle: { text: 'The odds of that river card were precisely—', final: true },
+    subtitle: { text: 'The odds of that river card were precisely…', final: true },
   }),
   'mic-muted': voiceScene({ enabled: true, npcState: 'connected', micMuted: true }),
   'npc-muted': voiceScene({
@@ -140,12 +140,12 @@ export const SCENES: Record<string, SceneConfig> = {
   }),
   'connection-lost': voiceScene({
     enabled: true, npcState: 'reconnecting',
-    error: { recoverable: true, message: 'Connection lost — reconnecting…', code: 'connection-lost' },
+    error: { recoverable: true, message: 'Connection lost, reconnecting…', code: 'connection-lost' },
   }),
   'reconnecting': voiceScene({ enabled: true, npcState: 'reconnecting' }),
   'voice-error': voiceScene({
     enabled: true, npcState: 'connected',
-    error: { recoverable: true, message: 'Speech recognition error. The game continues — try again or type instead.', code: 'transcription-failed' },
+    error: { recoverable: true, message: 'Speech recognition error. The game continues. Try again or type instead.', code: 'transcription-failed' },
   }),
   'text-fallback': voiceScene({ enabled: true, npcState: 'connected', micMode: 'text-only' }),
 };

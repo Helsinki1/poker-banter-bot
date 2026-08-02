@@ -114,7 +114,7 @@ export function useConversation(
       onAudioUnavailable: (message) => {
         setError({
           recoverable: true,
-          message: message ?? 'Audio is unavailable — showing subtitles only.',
+          message: message ?? 'Audio is unavailable. Showing subtitles only.',
           code: 'audio-failed',
         });
       },

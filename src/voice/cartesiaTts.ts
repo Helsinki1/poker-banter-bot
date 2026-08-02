@@ -106,7 +106,7 @@ async function resolveVoiceId(voice: NpcVoiceOption, apiKey: string): Promise<st
   const id = exact ?? partial;
   if (!id) {
     throw new Error(
-      `Voice "${voice.libraryNames[0]}" not found in your Cartesia voice library — add it at play.cartesia.ai.`,
+      `Voice "${voice.libraryNames[0]}" not found in your Cartesia voice library. Add it at play.cartesia.ai.`,
     );
   }
   cache[voice.id] = id;

@@ -56,7 +56,7 @@ export default function VoiceDock({ convo, demo }: Props) {
         <button className="voice-enable-btn" onClick={convo.enableVoice} data-testid="voice-enable">
           <MicIcon size={14} /> Enable Table Talk
         </button>
-        <span className="voice-off-note">Voice is optional — the game is fully playable without it.</span>
+        <span className="voice-off-note">Voice is optional. The game is fully playable without it.</span>
       </div>
     );
   }

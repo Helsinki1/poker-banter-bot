@@ -43,7 +43,7 @@ export default function LeaderboardScreen({ onPlay, highlight }: Props) {
         <ol className="board-list">
           {entries === null && <li className="board-empty">Reading the books…</li>}
           {entries?.length === 0 && (
-            <li className="board-empty">No scores yet — be the first name on the board.</li>
+            <li className="board-empty">No scores yet. Be the first name on the board.</li>
           )}
           {entries?.map((e, i) => {
             const ch = CHARACTER_MAP[e.opponentId];

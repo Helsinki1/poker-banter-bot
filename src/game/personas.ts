@@ -8,7 +8,7 @@
 // (wired one-way from App.tsx). Nothing in the conversation layer can reach
 // the poker engine through this — it is a flavor knob, not an action path.
 
-export type PersonaId = 'normal' | 'lebron' | 'trump';
+export type PersonaId = 'normal' | 'dana' | 'lebron' | 'trump';
 
 export interface PokerPersona {
   id: PersonaId;
@@ -43,6 +43,15 @@ export const POKER_PERSONAS: Record<PersonaId, PokerPersona> = {
     sticky: 0.5, shove: 0.2, shoveStrength: 0.78, heroCall: 0.35,
     chaos: 0.1, adapt: false,
   },
+  // Dana: warm and welcoming (difficulty 1). Patient and honest — friendly
+  // chat, sensible bets, no theatrics. Rarely bluffs or shoves, sticks around
+  // with the sensible hands rather than spewing.
+  dana: {
+    id: 'dana', label: 'Welcoming',
+    aggression: 0.4, bluff: 0.12, sizing: 0.55, sizingJitter: 0.2,
+    sticky: 0.45, shove: 0.14, shoveStrength: 0.82, heroCall: 0.32,
+    chaos: 0.08, adapt: false,
+  },
   // Phil Ivey mold: relentless calculated pressure, adapts to the player,
   // low noise, comfortable getting stacks in with an edge.
   lebron: {
@@ -64,7 +73,7 @@ export const POKER_PERSONAS: Record<PersonaId, PokerPersona> = {
 function initialPersona(): PersonaId {
   try {
     const saved = localStorage.getItem('npc-voice');
-    if (saved === 'normal' || saved === 'lebron' || saved === 'trump') return saved;
+    if (saved === 'normal' || saved === 'dana' || saved === 'lebron' || saved === 'trump') return saved;
   } catch { /* SSR / private mode */ }
   return 'normal';
 }
@@ -77,5 +86,7 @@ export function setActivePokerPersona(id: PersonaId): void {
 }
 
 export function getActivePokerPersona(): PokerPersona {
-  return POKER_PERSONAS[activePersonaId];
+  // Fall back to the solid baseline if the active id has no persona — a
+  // missing persona must never leave the opponent unable to act.
+  return POKER_PERSONAS[activePersonaId] ?? POKER_PERSONAS.normal;
 }

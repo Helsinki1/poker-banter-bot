@@ -53,11 +53,14 @@ export default function CharacterPicker({ initialSelected, onStart }: Props) {
               <span className="char-name">{ch.name}</span>
               <span className="char-tagline">{ch.tagline}</span>
               <span className="char-style">{ch.pokerStyle}</span>
-              <span className="char-difficulty" aria-label={`Difficulty: ${ch.difficultyLabel}`}>
-                {Array.from({ length: 3 }, (_, i) => (
-                  <span key={i} className={`pip${i < ch.difficulty ? ' lit' : ''}`} />
-                ))}
-                <span className="diff-label">{ch.difficultyLabel}</span>
+              <span className="char-difficulty" aria-label={`Roast rating: ${ch.difficultyLabel}`}>
+                <span className="roast-caption">Roast Rating</span>
+                <span className="roast-meter">
+                  {Array.from({ length: 3 }, (_, i) => (
+                    <span key={i} className={`pip${i < ch.difficulty ? ' lit' : ''}`} />
+                  ))}
+                  <span className="diff-label">{ch.difficultyLabel}</span>
+                </span>
               </span>
               {isSelected && <span className="char-intro">&ldquo;{ch.introLine}&rdquo;</span>}
             </button>
