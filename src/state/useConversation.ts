@@ -147,6 +147,9 @@ export function useConversation(
       client.onNpcAudio((e) => ttsRef.current?.handle(e)),
       client.onError(setError),
     ];
+    // Pay the voice-id lookup and TTS websocket handshake now, while the player
+    // is still sitting down — not on the first taunt.
+    ttsRef.current?.prewarm();
     void client.connect({
       opponentId,
       snapshot: snapshot ? toPublicSnapshot(snapshot) : null,
@@ -154,7 +157,7 @@ export function useConversation(
     return () => {
       for (const un of subs) un();
       void client.disconnect();
-      ttsRef.current?.stop();
+      ttsRef.current?.destroy();
       clientRef.current = null;
       setNpcState('disconnected');
     };
@@ -216,6 +219,15 @@ export function useConversation(
       onFinal: (text: string) => {
         clientRef.current?.sendPlayerUtterance(text);
         setPlayerInterim('');
+      },
+      // Cartesia thinks the player has probably finished: start generating the
+      // reply now. Retracted by onEagerCancel if they keep talking, so the
+      // eager window becomes free head start rather than a wrong answer.
+      onEagerFinal: (text: string) => {
+        clientRef.current?.sendSpeculativeUtterance(text);
+      },
+      onEagerCancel: () => {
+        clientRef.current?.cancelSpeculativeUtterance();
       },
       onError: (message: string, recoverable: boolean) => {
         setError({ recoverable, message, code: 'transcription-failed' });

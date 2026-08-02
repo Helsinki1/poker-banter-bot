@@ -1,18 +1,27 @@
 import type { AudioStreamEvent } from '../api/conversationClient';
 import { TtsPlayer } from './ttsPlayer';
+import { PcmQueue } from './pcmQueue';
+import { CartesiaTtsSocket, TTS_SAMPLE_RATE, CARTESIA_VERSION } from './cartesiaTtsSocket';
 
-// Cartesia-backed NPC voice. Takes the full text of an NPC response, calls
-// the Cartesia TTS API to synthesize an MP3, and plays it at 1.1x speed.
-// While the MP3 plays, the subtitle text is revealed word-by-word in step
-// with actual playback progress, so what the sprite "says" on screen tracks
-// what you hear. If no API key is configured (or a request fails) we fall
-// back to the original speechSynthesis player and the mock's own word
-// pacing — the game never blocks on audio.
+// Cartesia-backed NPC voice, streaming.
+//
+// Text fragments arrive as the LLM writes them and are pushed straight into a
+// Cartesia TTS context; raw PCM streams back and is scheduled gaplessly by
+// PcmQueue, so the first audio lands ~90ms after the first fragment instead of
+// after a whole MP3 has been synthesized.
+//
+// Subtitles are paced by Cartesia's own word timestamps against the audio
+// clock, so what the sprite "says" on screen matches what you hear. If no API
+// key is configured (or the socket fails) we fall back to the speechSynthesis
+// player — the game never blocks on audio.
 
 const CARTESIA_BASE = 'https://api.cartesia.ai';
-const CARTESIA_VERSION = '2025-04-16';
-const MODEL_ID = 'sonic-2';
-const PLAYBACK_RATE = 1.1;
+/**
+ * Native Cartesia speed instead of HTMLAudioElement.playbackRate: the streamed
+ * path has no media element, and native speed preserves prosody rather than
+ * resampling the voice upward.
+ */
+const SPEECH_SPEED = 'fast' as const;
 const VOICE_ID_CACHE_KEY = 'cartesia-voice-ids-v1';
 
 export type NpcVoice = 'normal' | 'lebron' | 'trump';
@@ -102,24 +111,6 @@ async function resolveVoiceId(voice: NpcVoiceOption, apiKey: string): Promise<st
   return id;
 }
 
-/** Synthesize one MP3 for the given text and voice. */
-async function synthesizeMp3(text: string, voiceId: string, apiKey: string): Promise<Blob> {
-  const res = await fetch(`${CARTESIA_BASE}/tts/bytes`, {
-    method: 'POST',
-    headers: cartesiaHeaders(apiKey),
-    body: JSON.stringify({
-      model_id: MODEL_ID,
-      transcript: text,
-      voice: { mode: 'id', id: voiceId },
-      language: 'en',
-      output_format: { container: 'mp3', sample_rate: 44100, bit_rate: 128000 },
-    }),
-  });
-  if (!res.ok) throw new Error(`Cartesia TTS failed (${res.status})`);
-  const buf = await res.arrayBuffer();
-  return new Blob([buf], { type: 'audio/mpeg' });
-}
-
 export interface CartesiaPlayerEvents {
   onSpeakingChange(speaking: boolean): void;
   onAudioUnavailable(message?: string): void;
@@ -132,9 +123,15 @@ export interface CartesiaPlayerEvents {
 interface ActivePlayback {
   responseId: string;
   epoch: number;
-  audio: HTMLAudioElement | null;
-  objectUrl: string | null;
+  /** Text sent to Cartesia so far, for subtitle assembly. */
+  sentText: string;
+  /** Word timings from Cartesia, in audio-clock seconds. */
+  words: string[];
+  wordStarts: number[];
   raf: number | null;
+  /** Set once the fragment stream is closed. */
+  complete: boolean;
+  lastSubtitle: string;
 }
 
 export class CartesiaVoicePlayer {
@@ -145,6 +142,11 @@ export class CartesiaVoicePlayer {
   private epoch = 0;
   private active: ActivePlayback | null = null;
   private speaking = false;
+  private socket: CartesiaTtsSocket | null = null;
+  private audioCtx: AudioContext | null = null;
+  private queue: PcmQueue | null = null;
+  /** Resolved voice ids, prewarmed at connect so no response pays the lookup. */
+  private voiceIdPromises = new Map<NpcVoice, Promise<string>>();
 
   constructor(events: CartesiaPlayerEvents) {
     this.events = events;
@@ -156,6 +158,64 @@ export class CartesiaVoicePlayer {
 
   setVoice(id: NpcVoice): void {
     this.voice = NPC_VOICE_OPTIONS.find((v) => v.id === id) ?? NPC_VOICE_OPTIONS[0];
+  }
+
+  /**
+   * Pay every fixed cost before the player ever speaks: resolve the voice id
+   * (which can walk the whole voice library) and open the TTS websocket. Called
+   * at conversation connect; failures are non-fatal since the speechSynthesis
+   * fallback still works.
+   */
+  prewarm(): void {
+    const apiKey = getCartesiaApiKey();
+    if (!apiKey) return;
+    void this.resolveVoiceCached(this.voice, apiKey).catch(() => { /* falls back later */ });
+    try {
+      void this.getSocket(apiKey).ensureOpen().catch(() => { /* falls back later */ });
+    } catch { /* destroyed */ }
+  }
+
+  /** Resume the AudioContext from a user gesture (browsers require this). */
+  unlockAudio(): void {
+    const ctx = this.audioCtx;
+    if (ctx?.state === 'suspended') void ctx.resume().catch(() => { /* noop */ });
+  }
+
+  private resolveVoiceCached(voice: NpcVoiceOption, apiKey: string): Promise<string> {
+    const existing = this.voiceIdPromises.get(voice.id);
+    if (existing) return existing;
+    const p = resolveVoiceId(voice, apiKey).catch((err: unknown) => {
+      // Do not cache failures — a transient network error should be retried.
+      this.voiceIdPromises.delete(voice.id);
+      throw err;
+    });
+    this.voiceIdPromises.set(voice.id, p);
+    return p;
+  }
+
+  private getAudioContext(): AudioContext {
+    if (!this.audioCtx) {
+      this.audioCtx = new AudioContext({ sampleRate: TTS_SAMPLE_RATE });
+    }
+    return this.audioCtx;
+  }
+
+  private getSocket(apiKey: string): CartesiaTtsSocket {
+    if (!this.socket) {
+      this.socket = new CartesiaTtsSocket(apiKey, {
+        onChunk: (responseId, pcm) => this.onPcmChunk(responseId, pcm),
+        onTimestamps: (responseId, words, starts) => this.onWordTimestamps(responseId, words, starts),
+        onDone: (responseId) => this.onGenerationDone(responseId),
+        onError: (responseId, message) => {
+          // Only tear down a response the error actually belongs to. An
+          // unattributable error (no context_id) must not drop the NPC to the
+          // browser voice mid-sentence.
+          if (!responseId || this.active?.responseId !== responseId) return;
+          this.failStreaming(message);
+        },
+      });
+    }
+    return this.socket;
   }
 
   getVoice(): NpcVoice {
@@ -181,6 +241,10 @@ export class CartesiaVoicePlayer {
     return !!responseId && this.active?.responseId === responseId;
   }
 
+  /**
+   * Consume one streamed TTS event. Non-`last` events carry an incremental
+   * text fragment to synthesize; `last` closes (or cancels) the response.
+   */
   handle(event: AudioStreamEvent): void {
     if (event.kind !== 'tts') return;
 
@@ -189,16 +253,18 @@ export class CartesiaVoicePlayer {
         // Interrupted / cancelled — audio must stop immediately.
         if (this.active?.responseId === event.responseId) this.stop();
         else this.fallback.handle(event);
-      } else if (!this.isDriving(event.responseId)) {
+        return;
+      }
+      if (this.isDriving(event.responseId)) {
+        // Close the Cartesia context; audio already queued finishes naturally.
+        this.closeStream(event.responseId);
+      } else {
         // Natural end of the text stream while on the fallback path.
         this.fallback.handle(event);
       }
-      // When Cartesia is driving, a natural stream end is ignored: the MP3
-      // finishes on its own and emits the final subtitle then.
       return;
     }
 
-    this.stop();
     if (this.muted) return;
 
     const apiKey = getCartesiaApiKey();
@@ -207,117 +273,181 @@ export class CartesiaVoicePlayer {
       return;
     }
 
+    // A fragment for the response already streaming: append to its context.
+    if (this.active?.responseId === event.responseId) {
+      void this.pushFragment(this.active, event.text, apiKey);
+      return;
+    }
+
+    // First fragment of a new response — replace whatever came before.
+    this.stop();
+    const ctx = this.getAudioContext();
+    if (ctx.state === 'suspended') void ctx.resume().catch(() => { /* gesture needed */ });
+
     const playback: ActivePlayback = {
       responseId: event.responseId,
       epoch: ++this.epoch,
-      audio: null,
-      objectUrl: null,
+      sentText: '',
+      words: [],
+      wordStarts: [],
       raf: null,
+      complete: false,
+      lastSubtitle: '',
     };
     this.active = playback;
-    void this.speakViaCartesia(event, playback, apiKey);
+    this.queue = new PcmQueue(ctx, {
+      onFirstAudio: () => {
+        if (this.epoch !== playback.epoch) return;
+        this.setSpeaking(true);
+        this.startRevealLoop(playback);
+      },
+      onDrained: () => {
+        if (this.epoch !== playback.epoch) return;
+        this.finishPlayback(playback);
+      },
+    });
+    void this.pushFragment(playback, event.text, apiKey);
   }
 
-  private async speakViaCartesia(
-    event: Extract<AudioStreamEvent, { kind: 'tts' }>,
+  private async pushFragment(
     playback: ActivePlayback,
+    text: string,
     apiKey: string,
   ): Promise<void> {
+    const fragment = text.trim();
+    if (!fragment) return;
+    playback.sentText = playback.sentText ? `${playback.sentText} ${fragment}` : fragment;
     try {
-      const voiceId = await resolveVoiceId(this.voice, apiKey);
-      const mp3 = await synthesizeMp3(event.text, voiceId, apiKey);
-      if (this.epoch !== playback.epoch) return; // stopped/replaced while fetching
-
-      const url = URL.createObjectURL(mp3);
-      const audio = new Audio(url);
-      playback.audio = audio;
-      playback.objectUrl = url;
-      audio.playbackRate = PLAYBACK_RATE;
-      audio.preservesPitch = true;
-
-      const words = event.text.split(/\s+/).filter(Boolean);
-      let lastPartial = '';
-      const reveal = () => {
-        if (this.epoch !== playback.epoch) return;
-        const dur = audio.duration;
-        if (Number.isFinite(dur) && dur > 0) {
-          // Slight lead so the word appears as it starts being spoken.
-          const frac = Math.min(1, (audio.currentTime + 0.12) / dur);
-          const count = Math.max(1, Math.ceil(frac * words.length));
-          const partial = words.slice(0, count).join(' ');
-          if (partial !== lastPartial) {
-            lastPartial = partial;
-            this.events.onTextProgress(playback.responseId, partial, false);
-          }
-        }
-        if (!audio.ended && !audio.paused) {
-          playback.raf = requestAnimationFrame(reveal);
-        }
-      };
-
-      audio.onplaying = () => {
-        if (this.epoch !== playback.epoch) return;
-        audio.playbackRate = PLAYBACK_RATE; // some browsers reset it on play()
-        this.setSpeaking(true);
-        reveal();
-      };
-      audio.onended = () => {
-        if (this.epoch !== playback.epoch) return;
-        this.events.onTextProgress(playback.responseId, event.text, true);
-        this.cleanup(playback);
-        this.active = null;
-        this.setSpeaking(false);
-      };
-      audio.onerror = () => {
-        if (this.epoch !== playback.epoch) return;
-        this.failOver(event, playback, 'Voice playback failed — using the built-in voice.');
-      };
-
-      await audio.play();
+      const voiceId = await this.resolveVoiceCached(this.voice, apiKey);
+      if (this.epoch !== playback.epoch) return; // replaced while resolving
+      await this.getSocket(apiKey).send(playback.responseId, voiceId, fragment, false, SPEECH_SPEED);
     } catch (err) {
       if (this.epoch !== playback.epoch) return;
       const message = err instanceof Error ? err.message : 'Cartesia voice unavailable.';
-      this.failOver(event, playback, `${message} Using the built-in voice.`);
+      this.failStreaming(`${message} Using the built-in voice.`);
     }
   }
 
-  /** Cartesia failed for this response: hand off to speechSynthesis + transcript pacing. */
-  private failOver(
-    event: Extract<AudioStreamEvent, { kind: 'tts' }>,
-    playback: ActivePlayback,
-    message: string,
-  ): void {
+  /** The text stream ended: tell Cartesia no more fragments are coming. */
+  private closeStream(responseId: string): void {
+    const playback = this.active;
+    if (!playback || playback.responseId !== responseId) return;
+    playback.complete = true;
+    const apiKey = getCartesiaApiKey();
+    if (!apiKey || !this.socket) return;
+    void this.resolveVoiceCached(this.voice, apiKey)
+      .then((voiceId) => {
+        if (this.epoch !== playback.epoch) return;
+        // Empty transcript + continue:false is Cartesia's end-of-input signal.
+        return this.socket?.send(responseId, voiceId, '', true, SPEECH_SPEED);
+      })
+      .catch(() => { /* the tail may just end early */ });
+  }
+
+  private onPcmChunk(responseId: string, pcm: Int16Array): void {
+    const playback = this.active;
+    if (!playback || playback.responseId !== responseId || this.muted) return;
+    this.queue?.enqueue(pcm, TTS_SAMPLE_RATE);
+  }
+
+  private onWordTimestamps(responseId: string, words: string[], starts: number[]): void {
+    const playback = this.active;
+    if (!playback || playback.responseId !== responseId) return;
+    // Timestamps arrive per fragment, already offset within the context.
+    playback.words.push(...words);
+    playback.wordStarts.push(...starts);
+  }
+
+  private onGenerationDone(responseId: string): void {
+    const playback = this.active;
+    if (!playback || playback.responseId !== responseId) return;
+    // Generation finished; playback may still be draining.
+    this.queue?.markComplete();
+  }
+
+  /**
+   * Reveal subtitle words as they are actually heard, using Cartesia's word
+   * timestamps against the audio clock.
+   */
+  private startRevealLoop(playback: ActivePlayback): void {
+    const tick = () => {
+      if (this.epoch !== playback.epoch) return;
+      const elapsed = this.queue?.elapsed() ?? -1;
+      if (elapsed >= 0 && playback.words.length > 0) {
+        // Slight lead so a word appears as it starts being spoken.
+        const t = elapsed + 0.12;
+        let count = 0;
+        while (count < playback.wordStarts.length && playback.wordStarts[count] <= t) count++;
+        if (count > 0) {
+          const partial = playback.words.slice(0, count).join(' ');
+          if (partial !== playback.lastSubtitle) {
+            playback.lastSubtitle = partial;
+            this.events.onTextProgress(playback.responseId, partial, false);
+          }
+        }
+      }
+      playback.raf = requestAnimationFrame(tick);
+    };
+    playback.raf = requestAnimationFrame(tick);
+  }
+
+  private finishPlayback(playback: ActivePlayback): void {
+    const finalText = playback.words.length
+      ? playback.words.join(' ')
+      : playback.sentText;
+    this.events.onTextProgress(playback.responseId, finalText, true);
     this.cleanup(playback);
+    this.active = null;
+    this.queue = null;
+    this.setSpeaking(false);
+  }
+
+  /**
+   * Streaming failed mid-response. Anything already spoken stays spoken; the
+   * remainder is abandoned and subtitles revert to the transcript stream.
+   */
+  private failStreaming(message: string): void {
+    const playback = this.active;
+    if (!playback) return;
+    this.cleanup(playback);
+    this.queue?.stop();
+    this.queue = null;
     this.active = null;
     this.epoch++;
     this.setSpeaking(false);
     this.events.onAudioUnavailable(message);
     this.events.onDrivingFailed(playback.responseId);
-    this.fallback.handle(event);
   }
 
   stop(): void {
     this.epoch++;
-    if (this.active) {
-      this.cleanup(this.active);
+    const playback = this.active;
+    if (playback) {
+      this.socket?.cancel(playback.responseId);
+      this.cleanup(playback);
       this.active = null;
     }
+    this.queue?.stop();
+    this.queue = null;
     this.fallback.stop();
     this.setSpeaking(false);
   }
 
-  private cleanup(playback: ActivePlayback): void {
-    if (playback.raf !== null) cancelAnimationFrame(playback.raf);
-    if (playback.audio) {
-      playback.audio.onplaying = null;
-      playback.audio.onended = null;
-      playback.audio.onerror = null;
-      try { playback.audio.pause(); } catch { /* noop */ }
-      playback.audio = null;
+  /** Release the socket and audio graph (conversation teardown). */
+  destroy(): void {
+    this.stop();
+    this.socket?.destroy();
+    this.socket = null;
+    if (this.audioCtx) {
+      void this.audioCtx.close().catch(() => { /* already closed */ });
+      this.audioCtx = null;
     }
-    if (playback.objectUrl) {
-      URL.revokeObjectURL(playback.objectUrl);
-      playback.objectUrl = null;
+  }
+
+  private cleanup(playback: ActivePlayback): void {
+    if (playback.raf !== null) {
+      cancelAnimationFrame(playback.raf);
+      playback.raf = null;
     }
   }
 
