@@ -172,7 +172,7 @@ export class MockRealtimeConversationClient implements RealtimeConversationClien
     const id = this.activeResponse.id;
     this.activeResponse = null;
     // Cancelled audio must stop: signal a final empty audio chunk.
-    emit(this.npcAudioE, { kind: 'tts', responseId: id, text: '', voice: this.voice(), last: true });
+    emit(this.npcAudioE, { kind: 'tts', responseId: id, text: '', voice: this.voice(), last: true, cancelled: true });
     this.setState('interrupted');
     const t = setTimeout(() => {
       if (this.state === 'interrupted') this.setState(this.micEnabled ? 'listening' : 'connected');

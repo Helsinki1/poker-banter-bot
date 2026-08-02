@@ -4,7 +4,7 @@ import type { ConversationError, NpcConversationState } from '../api/conversatio
 import { toPublicSnapshot } from '../api/conversationClient';
 import { MockRealtimeConversationClient } from '../api/mockConversationClient';
 import { DictationAdapter, isDictationSupported, type DictationStatus } from '../voice/dictation';
-import { TtsPlayer } from '../voice/ttsPlayer';
+import { CartesiaVoicePlayer, type NpcVoice } from '../voice/cartesiaTts';
 
 // Conversation-side coordinator. Owns the realtime client, the browser
 // dictation adapter and NPC audio playback. Receives ONLY public game
@@ -27,6 +27,8 @@ export interface ConversationController {
   subtitle: { text: string; final: boolean } | null;
   error: ConversationError | null;
   ttsSpeaking: boolean;
+  npcVoice: NpcVoice;
+  setNpcVoice: (voice: NpcVoice) => void;
   enableVoice: () => void;
   disableVoice: () => void;
   setMicMode: (mode: MicMode) => void;
@@ -48,7 +50,9 @@ export function useConversation(
 ): ConversationController {
   const clientRef = useRef<MockRealtimeConversationClient | null>(null);
   const dictationRef = useRef<DictationAdapter | null>(null);
-  const ttsRef = useRef<TtsPlayer | null>(null);
+  const ttsRef = useRef<CartesiaVoicePlayer | null>(null);
+  /** Latest transcript event withheld while Cartesia paces the subtitle. */
+  const pendingTranscriptRef = useRef<{ responseId?: string; text: string; final: boolean } | null>(null);
 
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [npcState, setNpcState] = useState<NpcConversationState>('disconnected');
@@ -64,19 +68,42 @@ export function useConversation(
   const [subtitle, setSubtitle] = useState<{ text: string; final: boolean } | null>(null);
   const [error, setError] = useState<ConversationError | null>(null);
   const [ttsSpeaking, setTtsSpeaking] = useState(false);
+  const [npcVoice, setNpcVoiceState] = useState<NpcVoice>(() => {
+    try {
+      const saved = localStorage.getItem('npc-voice');
+      if (saved === 'normal' || saved === 'lebron' || saved === 'trump' || saved === 'flight') return saved;
+    } catch { /* private mode */ }
+    return 'normal';
+  });
   const interimClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const dictationSupported = useMemo(() => isDictationSupported(), []);
 
-  // TTS player (stable across renders).
+  // NPC voice player (stable across renders). Cartesia MP3 at 1.1x when a
+  // key is configured; speechSynthesis fallback otherwise.
   if (!ttsRef.current) {
-    ttsRef.current = new TtsPlayer({
+    ttsRef.current = new CartesiaVoicePlayer({
       onSpeakingChange: setTtsSpeaking,
-      onAudioUnavailable: () => {
-        setError({ recoverable: true, message: 'Audio is unavailable — showing subtitles only.', code: 'audio-failed' });
+      onAudioUnavailable: (message) => {
+        setError({
+          recoverable: true,
+          message: message ?? 'Audio is unavailable — showing subtitles only.',
+          code: 'audio-failed',
+        });
+      },
+      // Subtitle words paced by actual MP3 playback progress.
+      onTextProgress: (_responseId, text, final) => setSubtitle({ text, final }),
+      // Cartesia bailed on this response — show whatever the transcript
+      // stream said while we were withholding it.
+      onDrivingFailed: (responseId) => {
+        const pending = pendingTranscriptRef.current;
+        if (pending && pending.responseId === responseId) {
+          setSubtitle({ text: pending.text, final: pending.final });
+        }
       },
     });
   }
+  ttsRef.current.setVoice(npcVoice);
 
   // Connect / disconnect the conversation session.
   useEffect(() => {
@@ -85,7 +112,15 @@ export function useConversation(
     clientRef.current = client;
     const subs = [
       client.onNpcStateChange(setNpcState),
-      client.onNpcTranscript((e) => setSubtitle({ text: e.text, final: e.final })),
+      client.onNpcTranscript((e) => {
+        // While Cartesia is voicing this response the audio player owns
+        // subtitle pacing; stash the transcript in case Cartesia fails.
+        if (e.responseId && ttsRef.current?.isDriving(e.responseId)) {
+          pendingTranscriptRef.current = { responseId: e.responseId, text: e.text, final: e.final };
+          return;
+        }
+        setSubtitle({ text: e.text, final: e.final });
+      }),
       client.onPlayerTranscript((e) => {
         if (e.final) {
           setPlayerFinal(e.text);
@@ -141,11 +176,12 @@ export function useConversation(
       },
       onInterim: (text) => {
         // Barge-in: the player starting to speak interrupts the NPC.
-        if (clientRef.current && (npcStateRef.current === 'speaking' || ttsRef.current?.isMuted() === false)) {
-          if (npcStateRef.current === 'speaking') {
-            clientRef.current.interruptNpc();
-            ttsRef.current?.stop();
-          }
+        if (npcStateRef.current === 'speaking') {
+          clientRef.current?.interruptNpc();
+          ttsRef.current?.stop();
+        } else if (ttsRef.current?.isSpeaking()) {
+          // The MP3 can outlast the transcript stream — barge-in stops it too.
+          ttsRef.current.stop();
         }
         setPlayerInterim(text);
         if (interimClearRef.current) clearTimeout(interimClearRef.current);
@@ -230,6 +266,12 @@ export function useConversation(
 
   const dismissError = useCallback(() => setError(null), []);
 
+  const setNpcVoice = useCallback((voice: NpcVoice) => {
+    setNpcVoiceState(voice);
+    ttsRef.current?.setVoice(voice);
+    try { localStorage.setItem('npc-voice', voice); } catch { /* private mode */ }
+  }, []);
+
   const simulateDrop = useCallback(() => clientRef.current?.simulateConnectionDrop(), []);
 
   return {
@@ -246,6 +288,8 @@ export function useConversation(
     subtitle,
     error,
     ttsSpeaking,
+    npcVoice,
+    setNpcVoice,
     enableVoice,
     disableVoice,
     setMicMode,

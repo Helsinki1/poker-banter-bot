@@ -94,7 +94,11 @@ export interface TranscriptEvent {
  * through the same event so the UI is provider-agnostic.
  */
 export type AudioStreamEvent =
-  | { kind: 'tts'; responseId: string; text: string; voice: VoiceProfile; last: boolean }
+  | {
+    kind: 'tts'; responseId: string; text: string; voice: VoiceProfile; last: boolean;
+    /** Set on `last` events that end a response early (interruption/cancel) — playback must stop now. A plain `last` just closes the stream; audio finishes naturally. */
+    cancelled?: boolean;
+  }
   | { kind: 'pcm'; responseId: string; chunk: ArrayBuffer; last: boolean };
 
 export interface ConversationError {

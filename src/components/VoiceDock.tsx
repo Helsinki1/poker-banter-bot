@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { ConversationController, MicMode } from '../state/useConversation';
+import { NPC_VOICE_OPTIONS, type NpcVoice } from '../voice/cartesiaTts';
 import type { VoiceDemo } from '../scenes';
 import {
   ConnectionIcon, KeyboardIcon, MicIcon, MicMutedIcon, SpeakerIcon,
@@ -32,7 +33,11 @@ export default function VoiceDock({ convo, demo }: Props) {
 
   // Demo scenes override display state only — controls stay real.
   const enabled = demo ? demo.enabled : convo.voiceEnabled;
-  const npcState = demo?.npcState ?? convo.npcState;
+  // The MP3 can outlast the transcript stream — keep showing "Speaking"
+  // until playback actually ends.
+  const rawNpcState = demo?.npcState ?? convo.npcState;
+  const npcState = convo.ttsSpeaking && (rawNpcState === 'connected' || rawNpcState === 'listening')
+    ? 'speaking' : rawNpcState;
   const micMode = demo?.micMode ?? convo.micMode;
   const micActive = demo?.micActive ?? convo.micActive;
   const micMuted = demo?.micMuted ?? convo.micMuted;
@@ -122,6 +127,18 @@ export default function VoiceDock({ convo, demo }: Props) {
         >
           ■ Skip
         </button>
+        <select
+          className="vc-mode"
+          value={convo.npcVoice}
+          onChange={(e) => convo.setNpcVoice(e.target.value as NpcVoice)}
+          aria-label="Opponent voice"
+          title="Opponent voice"
+          data-testid="npc-voice"
+        >
+          {NPC_VOICE_OPTIONS.map((v) => (
+            <option key={v.id} value={v.id}>{v.label}</option>
+          ))}
+        </select>
         <select
           className="vc-mode"
           value={micMode}
