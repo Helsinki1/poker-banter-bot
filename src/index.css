@@ -1,0 +1,65 @@
+/* Theatrical card-room theme. No remote fonts, no external images — local SVG + CSS only. */
+
+:root {
+  --walnut: #3b2416;
+  --walnut-dark: #2a1a0f;
+  --oxblood: #6b1f24;
+  --oxblood-dark: #4a1519;
+  --felt: #2e4d3a;
+  --felt-dark: #24402f;
+  --felt-light: #3a5c46;
+  --parchment: #e8d9b0;
+  --parchment-dim: #cfc4a2;
+  --brass: #9c7c3c;
+  --brass-light: #c9a55a;
+  --charcoal: #1a1714;
+  --charcoal-2: #23201b;
+  --ink: #14110e;
+  --lamplight: #f2c26b;
+  --danger: #b3454d;
+  --ok: #4a7c59;
+
+  --font-display: Georgia, 'Times New Roman', serif;
+  --font-ui: 'Courier New', ui-monospace, Menlo, monospace;
+
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden; /* no accidental scrollbars */
+}
+
+body {
+  background: var(--ink);
+  color: var(--parchment);
+  font-family: var(--font-ui);
+  font-size: 14px;
+}
+
+#root { height: 100%; }
+
+button { font-family: var(--font-ui); cursor: pointer; }
+
+button:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--brass-light);
+  outline-offset: 2px;
+}
+
+button:disabled { cursor: not-allowed; }
+
+/* Pixel sprites must never blur. */
+.px-sprite { image-rendering: pixelated; display: block; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001s !important;
+    transition-duration: 0.001s !important;
+  }
+}

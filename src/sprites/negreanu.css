@@ -1,0 +1,323 @@
+/* negreanu.css — mood-driven pixel animation for NegreanuSprite.
+   All motion lives behind prefers-reduced-motion: no-preference and uses
+   steps() timing to keep the blocky handmade feel. */
+
+.px-negreanu {
+  image-rendering: pixelated;
+  display: block;
+}
+
+.px-negreanu g,
+.px-negreanu rect {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* eyelids rest as a 1px upper-lid sliver; blink stretches them down */
+.px-negreanu .neg-eyelids rect {
+  transform-origin: 50% 0;
+  transform: scaleY(0.18);
+}
+
+/* mouth frames: default slight smirk only */
+.px-negreanu .neg-mouth > g {
+  opacity: 0;
+}
+.px-negreanu .neg-mouth-idle {
+  opacity: 1;
+}
+
+/* fx hidden until a mood asks for them */
+.px-negreanu .neg-fx > g {
+  opacity: 0;
+}
+
+/* ---------- gaze (static, works regardless of motion prefs) ---------- */
+.px-negreanu[data-gaze='board'] .neg-pupils {
+  transform: translate(-2px, 1px);
+}
+.px-negreanu[data-gaze='away'] .neg-pupils {
+  transform: translate(2px, -1px);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* ================= always-on ================= */
+  .px-negreanu .neg-breather,
+  .px-negreanu .neg-headin {
+    animation: neg-breathe 3.1s steps(2, end) infinite;
+  }
+  .px-negreanu .neg-eyelids rect {
+    animation: neg-blink 3.8s steps(1, end) infinite; /* blinks a touch often */
+  }
+
+  @keyframes neg-breathe {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-1px); }
+  }
+  @keyframes neg-blink {
+    0%, 91% { transform: scaleY(0.18); }
+    92%, 96% { transform: scaleY(1); }
+    97%, 100% { transform: scaleY(0.18); }
+  }
+
+  /* ================= idle: observing head scan ================= */
+  .px-negreanu[data-mood='idle'] .neg-head {
+    animation: neg-scan 5.6s steps(1, end) infinite;
+  }
+  @keyframes neg-scan {
+    0%, 34% { transform: translateX(0); }
+    38%, 58% { transform: translateX(-2px); }
+    62%, 88% { transform: translateX(2px); }
+    92%, 100% { transform: translateX(0); }
+  }
+
+  /* ================= thinking: cards <-> player dart, chin on hand ===== */
+  .px-negreanu[data-mood='thinking'] .neg-pupils {
+    animation: neg-dart 2.2s steps(1, end) infinite;
+  }
+  @keyframes neg-dart {
+    0%, 42% { transform: translate(-2px, 1px); } /* board */
+    46%, 92% { transform: translate(0, 0); }     /* player */
+    96%, 100% { transform: translate(-2px, 1px); }
+  }
+  .px-negreanu[data-mood='thinking'] .neg-browL { transform: translateY(-2px); }
+  .px-negreanu[data-mood='thinking'] .neg-browR { transform: translateY(1px); }
+  .px-negreanu[data-mood='thinking'] .neg-armR { transform: translate(-2px, -6px); }
+  .px-negreanu[data-mood='thinking'] .neg-handR { transform: translate(-13px, -46px); }
+  .px-negreanu[data-mood='thinking'] .neg-fx-think {
+    opacity: 1;
+    animation: neg-motes 2.2s steps(2, end) infinite;
+  }
+  @keyframes neg-motes {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-2px); }
+  }
+
+  /* ================= speaking: liveliest talker ================= */
+  .px-negreanu[data-mood='speaking'] .neg-mouth-idle { opacity: 0; }
+  .px-negreanu[data-mood='speaking'] .neg-mouth-0 {
+    animation: neg-sp0 510ms steps(1, end) infinite;
+  }
+  .px-negreanu[data-mood='speaking'] .neg-mouth-1 {
+    animation: neg-sp1 510ms steps(1, end) infinite;
+  }
+  .px-negreanu[data-mood='speaking'] .neg-mouth-2 {
+    animation: neg-sp2 510ms steps(1, end) infinite;
+  }
+  @keyframes neg-sp0 { 0%, 32% { opacity: 1; } 33%, 100% { opacity: 0; } }
+  @keyframes neg-sp1 { 0%, 32% { opacity: 0; } 33%, 65% { opacity: 1; } 66%, 100% { opacity: 0; } }
+  @keyframes neg-sp2 { 0%, 65% { opacity: 0; } 66%, 100% { opacity: 1; } }
+  .px-negreanu[data-mood='speaking'] .neg-head {
+    animation: neg-bob 680ms steps(2, end) infinite;
+  }
+  @keyframes neg-bob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translate(1px, -1px); }
+  }
+  .px-negreanu[data-mood='speaking'] .neg-browL {
+    animation: neg-browlift 1.02s steps(1, end) infinite;
+  }
+  .px-negreanu[data-mood='speaking'] .neg-browR {
+    animation: neg-browlift 1.02s steps(1, end) infinite reverse;
+  }
+  @keyframes neg-browlift {
+    0%, 45% { transform: translateY(0); }
+    50%, 95% { transform: translateY(-2px); }
+    100% { transform: translateY(0); }
+  }
+
+  /* ================= listening: leans in, brows up ================= */
+  .px-negreanu[data-mood='listening'] .neg-torso { transform: translate(-1px, 2px); }
+  .px-negreanu[data-mood='listening'] .neg-head { transform: translate(-1px, 2px); }
+  .px-negreanu[data-mood='listening'] .neg-browL,
+  .px-negreanu[data-mood='listening'] .neg-browR { transform: translateY(-2px); }
+
+  /* ================= suspicious: narrow eyes, tilt, lean back ========= */
+  .px-negreanu[data-mood='suspicious'] .neg-eyes { transform: scaleY(0.6); }
+  .px-negreanu[data-mood='suspicious'] .neg-head { transform: translateX(1px) rotate(-4deg); }
+  .px-negreanu[data-mood='suspicious'] .neg-torso { transform: translateX(1px); }
+  .px-negreanu[data-mood='suspicious'] .neg-browL { transform: translateY(1px); }
+  .px-negreanu[data-mood='suspicious'] .neg-mouth-idle { opacity: 0; }
+  .px-negreanu[data-mood='suspicious'] .neg-mouth-0 { opacity: 1; }
+  .px-negreanu[data-mood='suspicious'] .neg-fx-glint {
+    opacity: 1;
+    animation: neg-glint 1.9s steps(1, end) infinite;
+  }
+  @keyframes neg-glint {
+    0%, 70% { opacity: 1; }
+    74%, 94% { opacity: 0; }
+    98%, 100% { opacity: 1; }
+  }
+
+  /* ================= amused: wide grin + shoulder chuckle ============ */
+  .px-negreanu[data-mood='amused'] .neg-mouth-idle { opacity: 0; }
+  .px-negreanu[data-mood='amused'] .neg-mouth-smile { opacity: 1; }
+  .px-negreanu[data-mood='amused'] .neg-torso {
+    animation: neg-chuckle 0.46s steps(2, end) infinite;
+  }
+  .px-negreanu[data-mood='amused'] .neg-head {
+    animation: neg-chuckle 0.46s steps(2, end) 0.08s infinite;
+  }
+  @keyframes neg-chuckle {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-1px); }
+  }
+
+  /* ================= surprised: max brows, open mouth, recoil ======== */
+  .px-negreanu[data-mood='surprised'] .neg-browL,
+  .px-negreanu[data-mood='surprised'] .neg-browR { transform: translateY(-3px); }
+  .px-negreanu[data-mood='surprised'] .neg-eyes { transform: scale(1.2); }
+  .px-negreanu[data-mood='surprised'] .neg-mouth-idle { opacity: 0; }
+  .px-negreanu[data-mood='surprised'] .neg-mouth-2 { opacity: 1; }
+  .px-negreanu[data-mood='surprised'] .neg-head {
+    animation: neg-recoil 0.4s steps(2, end) 1 both;
+  }
+  .px-negreanu[data-mood='surprised'] .neg-torso { transform: translateY(-1px); }
+  @keyframes neg-recoil {
+    0% { transform: translate(0, 0); }
+    100% { transform: translate(2px, -2px); }
+  }
+
+  /* ================= frustrated: knit brows, cap tug, twitch ========= */
+  .px-negreanu[data-mood='frustrated'] .neg-browL { transform: translate(1px, 1px) rotate(10deg); }
+  .px-negreanu[data-mood='frustrated'] .neg-browR {
+    transform: translate(-1px, 1px) rotate(-10deg);
+    animation: neg-browtwitch 2.4s steps(1, end) infinite;
+  }
+  @keyframes neg-browtwitch {
+    0%, 80% { transform: translate(-1px, 1px) rotate(-10deg); }
+    84%, 92% { transform: translate(-1px, 0) rotate(-10deg); }
+    96%, 100% { transform: translate(-1px, 1px) rotate(-10deg); }
+  }
+  .px-negreanu[data-mood='frustrated'] .neg-mouth-idle { opacity: 0; }
+  .px-negreanu[data-mood='frustrated'] .neg-mouth-frown { opacity: 1; }
+  .px-negreanu[data-mood='frustrated'] .neg-cap { transform: translateY(1px); }
+  .px-negreanu[data-mood='frustrated'] .neg-head { transform: translateY(1px); }
+  .px-negreanu[data-mood='frustrated'] .neg-torso { transform: translateY(2px); }
+
+  /* ================= losing: deeper slump, eyes down ================= */
+  .px-negreanu[data-mood='losing'] .neg-browL { transform: translate(1px, 1px) rotate(10deg); }
+  .px-negreanu[data-mood='losing'] .neg-browR { transform: translate(-1px, 1px) rotate(-10deg); }
+  .px-negreanu[data-mood='losing'] .neg-mouth-idle { opacity: 0; }
+  .px-negreanu[data-mood='losing'] .neg-mouth-frown { opacity: 1; }
+  .px-negreanu[data-mood='losing'] .neg-cap { transform: translateY(1px); }
+  .px-negreanu[data-mood='losing'] .neg-head { transform: translateY(3px) rotate(2deg); }
+  .px-negreanu[data-mood='losing'] .neg-torso { transform: translateY(3px); }
+  .px-negreanu[data-mood='losing'] .neg-pupils { transform: translate(-1px, 1px); }
+
+  /* ================= winning: grin, arms open, sparkles ============== */
+  .px-negreanu[data-mood='winning'] .neg-mouth-idle { opacity: 0; }
+  .px-negreanu[data-mood='winning'] .neg-mouth-smile { opacity: 1; }
+  .px-negreanu[data-mood='winning'] .neg-browL,
+  .px-negreanu[data-mood='winning'] .neg-browR { transform: translateY(-1px); }
+  .px-negreanu[data-mood='winning'] .neg-armL { transform: translate(-2px, -3px) rotate(-8deg); }
+  .px-negreanu[data-mood='winning'] .neg-handL { transform: translate(-3px, -4px); }
+  .px-negreanu[data-mood='winning'] .neg-armR { transform: translate(2px, -3px) rotate(8deg); }
+  .px-negreanu[data-mood='winning'] .neg-handR { transform: translate(3px, -4px); }
+  .px-negreanu[data-mood='winning'] .neg-fx-spark {
+    opacity: 1;
+    animation: neg-twinkle 0.9s steps(2, end) infinite;
+  }
+  @keyframes neg-twinkle {
+    0%, 100% { opacity: 1; transform: translateY(0); }
+    50% { opacity: 0.4; transform: translateY(-1px); }
+  }
+
+  /* ================= celebrating: winning + bounce, faster sparkles == */
+  .px-negreanu[data-mood='celebrating'] .neg-mouth-idle { opacity: 0; }
+  .px-negreanu[data-mood='celebrating'] .neg-mouth-smile { opacity: 1; }
+  .px-negreanu[data-mood='celebrating'] .neg-browL,
+  .px-negreanu[data-mood='celebrating'] .neg-browR { transform: translateY(-2px); }
+  .px-negreanu[data-mood='celebrating'] .neg-armL { transform: translate(-3px, -4px) rotate(-12deg); }
+  .px-negreanu[data-mood='celebrating'] .neg-handL { transform: translate(-4px, -6px); }
+  .px-negreanu[data-mood='celebrating'] .neg-armR { transform: translate(3px, -4px) rotate(12deg); }
+  .px-negreanu[data-mood='celebrating'] .neg-handR { transform: translate(4px, -6px); }
+  .px-negreanu[data-mood='celebrating'] .neg-torso,
+  .px-negreanu[data-mood='celebrating'] .neg-head {
+    animation: neg-bounce 0.5s steps(2, end) infinite;
+  }
+  @keyframes neg-bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-3px); }
+  }
+  .px-negreanu[data-mood='celebrating'] .neg-fx-spark {
+    opacity: 1;
+    animation: neg-twinkle 0.5s steps(2, end) infinite;
+  }
+
+  /* ================= betting: probing chip push (armL) =============== */
+  .px-negreanu[data-mood='betting'] .neg-armL,
+  .px-negreanu[data-mood='betting'] .neg-handL {
+    animation: neg-push 1.5s steps(4, end) infinite;
+  }
+  @keyframes neg-push {
+    0%, 55% { transform: translate(0, 0); }
+    60%, 80% { transform: translate(5px, -2px); }
+    85%, 100% { transform: translate(0, 0); }
+  }
+
+  /* ================= raising: same push, bigger and quicker ========== */
+  .px-negreanu[data-mood='raising'] .neg-armL,
+  .px-negreanu[data-mood='raising'] .neg-handL {
+    animation: neg-push-big 1.2s steps(4, end) infinite;
+  }
+  @keyframes neg-push-big {
+    0%, 45% { transform: translate(0, 0); }
+    52%, 78% { transform: translate(7px, -4px); }
+    85%, 100% { transform: translate(0, 0); }
+  }
+  .px-negreanu[data-mood='raising'] .neg-browL,
+  .px-negreanu[data-mood='raising'] .neg-browR { transform: translateY(-1px); }
+
+  /* ================= checking: light double table tap (handR) ======== */
+  .px-negreanu[data-mood='checking'] .neg-handR {
+    animation: neg-tap 1.7s steps(1, end) infinite;
+  }
+  @keyframes neg-tap {
+    0%, 58% { transform: translateY(0); }
+    62%, 67% { transform: translateY(-3px); }
+    71%, 76% { transform: translateY(0); }
+    80%, 85% { transform: translateY(-3px); }
+    89%, 100% { transform: translateY(0); }
+  }
+
+  /* ================= calling: tap + small chip slide ================= */
+  .px-negreanu[data-mood='calling'] .neg-handR {
+    animation: neg-tap 1.7s steps(1, end) infinite;
+  }
+  .px-negreanu[data-mood='calling'] .neg-armL,
+  .px-negreanu[data-mood='calling'] .neg-handL {
+    animation: neg-push 2.2s steps(4, end) infinite;
+  }
+
+  /* ================= folding: wrist flick, cards away, shrug ========= */
+  .px-negreanu[data-mood='folding'] .neg-cards {
+    animation: neg-fold 1s steps(5, end) 1 forwards;
+  }
+  @keyframes neg-fold {
+    0% { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+    60% { transform: translate(8px, -4px) rotate(8deg); opacity: 1; }
+    100% { transform: translate(14px, -6px) rotate(14deg); opacity: 0; }
+  }
+  .px-negreanu[data-mood='folding'] .neg-handR {
+    animation: neg-flick 0.5s steps(3, end) 1 both;
+  }
+  @keyframes neg-flick {
+    0% { transform: rotate(0deg); }
+    50% { transform: translate(2px, -3px) rotate(-20deg); }
+    100% { transform: rotate(0deg); }
+  }
+  .px-negreanu[data-mood='folding'] .neg-torso { transform: translateY(-1px); }
+  .px-negreanu[data-mood='folding'] .neg-armL,
+  .px-negreanu[data-mood='folding'] .neg-armR { transform: translateY(-1px); }
+  .px-negreanu[data-mood='folding'] .neg-browL,
+  .px-negreanu[data-mood='folding'] .neg-browR { transform: translateY(-2px); }
+  .px-negreanu[data-mood='folding'] .neg-mouth-idle { opacity: 0; }
+  .px-negreanu[data-mood='folding'] .neg-mouth-0 { opacity: 1; }
+
+  /* ================= confident: chin up, steady gaze, smirk ========== */
+  .px-negreanu[data-mood='confident'] .neg-head { transform: translateY(-1px) rotate(2deg); }
+  .px-negreanu[data-mood='confident'] .neg-browL,
+  .px-negreanu[data-mood='confident'] .neg-browR { transform: translateY(-1px); }
+  .px-negreanu[data-mood='confident'] .neg-fx-glint { opacity: 1; }
+}

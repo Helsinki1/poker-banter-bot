@@ -1,0 +1,226 @@
+/* Pixel-art dealer sprite animations. All motion keyed off [data-mood],
+   steps() timing to keep the pixel look, and gated behind
+   prefers-reduced-motion: no-preference. */
+
+.px-dealer {
+  display: block;
+  image-rendering: pixelated;
+}
+
+.px-dealer .dlr-armL,
+.px-dealer .dlr-armR,
+.px-dealer .dlr-glovesL,
+.px-dealer .dlr-glovesR,
+.px-dealer .dlr-deck-a,
+.px-dealer .dlr-deck-b {
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* ---------- idle: breathing + occasional blink ---------- */
+  .px-dealer[data-mood='idle'] .dlr-torso,
+  .px-dealer[data-mood='idle'] .dlr-head,
+  .px-dealer[data-mood='idle'] .dlr-hair,
+  .px-dealer[data-mood='idle'] .dlr-mouth {
+    animation: dlr-breathe 3.2s steps(2, end) infinite;
+  }
+  .px-dealer[data-mood='idle'] .dlr-eyes {
+    transform-box: fill-box;
+    transform-origin: 50% 50%;
+    animation: dlr-blink 4.4s steps(1, end) infinite;
+  }
+
+  /* ---------- shuffling: halves riffle, arms vibrate ---------- */
+  .px-dealer[data-mood='shuffling'] .dlr-deck-a {
+    animation: dlr-riffle 0.24s steps(2, end) infinite;
+  }
+  .px-dealer[data-mood='shuffling'] .dlr-deck-b {
+    animation: dlr-riffle 0.24s steps(2, end) infinite;
+    animation-delay: -0.12s;
+  }
+  .px-dealer[data-mood='shuffling'] .dlr-armL,
+  .px-dealer[data-mood='shuffling'] .dlr-glovesL {
+    animation: dlr-vibrate 0.12s steps(2, end) infinite;
+  }
+  .px-dealer[data-mood='shuffling'] .dlr-armR,
+  .px-dealer[data-mood='shuffling'] .dlr-glovesR {
+    animation: dlr-vibrate 0.12s steps(2, end) infinite;
+    animation-delay: -0.06s;
+  }
+
+  /* ---------- cutting: right hand lifts top half sideways and back ---------- */
+  .px-dealer[data-mood='cutting'] .dlr-armR,
+  .px-dealer[data-mood='cutting'] .dlr-glovesR {
+    animation: dlr-cut-hand 0.7s steps(4, end) infinite;
+  }
+  .px-dealer[data-mood='cutting'] .dlr-deck-b {
+    animation: dlr-cut-deck 0.7s steps(4, end) infinite;
+  }
+
+  /* ---------- dealing: THE key animation — armR sweeps toward center ---------- */
+  .px-dealer[data-mood='dealing'] .dlr-armR {
+    transform-box: fill-box;
+    transform-origin: 100% 0;
+    animation: dlr-deal-arm 0.45s steps(4, end) infinite;
+  }
+  .px-dealer[data-mood='dealing'] .dlr-glovesR {
+    animation: dlr-deal-glove 0.45s steps(4, end) infinite;
+  }
+  .px-dealer[data-mood='dealing'] .dlr-torso,
+  .px-dealer[data-mood='dealing'] .dlr-head,
+  .px-dealer[data-mood='dealing'] .dlr-hair,
+  .px-dealer[data-mood='dealing'] .dlr-eyes,
+  .px-dealer[data-mood='dealing'] .dlr-mouth,
+  .px-dealer[data-mood='dealing'] .dlr-armL,
+  .px-dealer[data-mood='dealing'] .dlr-glovesL {
+    animation: dlr-lean 0.45s steps(2, end) infinite;
+  }
+
+  /* ---------- burning: small flick to the side ---------- */
+  .px-dealer[data-mood='burning'] .dlr-armR,
+  .px-dealer[data-mood='burning'] .dlr-glovesR {
+    animation: dlr-burn 0.5s steps(3, end) infinite;
+  }
+
+  /* ---------- pulling-chips: both arms sweep inward ---------- */
+  .px-dealer[data-mood='pulling-chips'] .dlr-armL,
+  .px-dealer[data-mood='pulling-chips'] .dlr-glovesL {
+    animation: dlr-pull-l 0.8s steps(4, end) infinite;
+  }
+  .px-dealer[data-mood='pulling-chips'] .dlr-armR,
+  .px-dealer[data-mood='pulling-chips'] .dlr-glovesR {
+    animation: dlr-pull-r 0.8s steps(4, end) infinite;
+  }
+
+  /* ---------- pushing-pot: both arms extend forward together ---------- */
+  .px-dealer[data-mood='pushing-pot'] .dlr-armL,
+  .px-dealer[data-mood='pushing-pot'] .dlr-glovesL,
+  .px-dealer[data-mood='pushing-pot'] .dlr-armR,
+  .px-dealer[data-mood='pushing-pot'] .dlr-glovesR {
+    animation: dlr-push 0.9s steps(3, end) infinite;
+  }
+
+  /* ---------- collecting: armR sweeps across the table ---------- */
+  .px-dealer[data-mood='collecting'] .dlr-armR,
+  .px-dealer[data-mood='collecting'] .dlr-glovesR {
+    animation: dlr-collect 0.9s steps(5, end) infinite;
+  }
+  .px-dealer[data-mood='collecting'] .dlr-torso,
+  .px-dealer[data-mood='collecting'] .dlr-head,
+  .px-dealer[data-mood='collecting'] .dlr-hair,
+  .px-dealer[data-mood='collecting'] .dlr-eyes,
+  .px-dealer[data-mood='collecting'] .dlr-mouth {
+    animation: dlr-lean 0.9s steps(2, end) infinite;
+  }
+
+  /* ---------- resetting: square up the deck, small pat ---------- */
+  .px-dealer[data-mood='resetting'] .dlr-armL,
+  .px-dealer[data-mood='resetting'] .dlr-glovesL {
+    animation: dlr-reset-l 0.6s steps(3, end) infinite;
+  }
+  .px-dealer[data-mood='resetting'] .dlr-armR,
+  .px-dealer[data-mood='resetting'] .dlr-glovesR {
+    animation: dlr-reset-r 0.6s steps(3, end) infinite;
+  }
+}
+
+/* ---------------- keyframes ---------------- */
+
+@keyframes dlr-breathe {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1px); }
+}
+
+@keyframes dlr-blink {
+  0%, 90% { transform: scaleY(1); }
+  92%, 96% { transform: scaleY(0.15); }
+  98%, 100% { transform: scaleY(1); }
+}
+
+@keyframes dlr-riffle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes dlr-vibrate {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(1px, -1px); }
+}
+
+@keyframes dlr-cut-hand {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(-4px, 6px); }
+  55% { transform: translate(8px, 2px); }
+  80% { transform: translate(0, 4px); }
+}
+
+@keyframes dlr-cut-deck {
+  0%, 100% { transform: translate(0, 0); }
+  30% { transform: translate(10px, -6px); }
+  60% { transform: translate(10px, -2px); }
+  85% { transform: translate(0, 0); }
+}
+
+@keyframes dlr-deal-arm {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  25% { transform: translate(-9px, 4px) rotate(-8deg); }
+  55% { transform: translate(-20px, 8px) rotate(-16deg); }
+  80% { transform: translate(-6px, 2px) rotate(-5deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+
+@keyframes dlr-deal-glove {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(-9px, 5px); }
+  55% { transform: translate(-21px, 10px); }
+  80% { transform: translate(-6px, 3px); }
+  100% { transform: translate(0, 0); }
+}
+
+@keyframes dlr-lean {
+  0%, 100% { transform: translate(0, 0); }
+  40% { transform: translate(-2px, 1px); }
+}
+
+@keyframes dlr-burn {
+  0%, 100% { transform: translate(0, 0); }
+  35% { transform: translate(9px, 2px); }
+  65% { transform: translate(9px, 0); }
+}
+
+@keyframes dlr-pull-l {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(-6px, 9px); }
+  60% { transform: translate(3px, -2px); }
+}
+
+@keyframes dlr-pull-r {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(6px, 9px); }
+  60% { transform: translate(-3px, -2px); }
+}
+
+@keyframes dlr-push {
+  0%, 100% { transform: translate(0, 0); }
+  35% { transform: translate(0, 10px); }
+  70% { transform: translate(0, 9px); }
+}
+
+@keyframes dlr-collect {
+  0%, 100% { transform: translate(0, 0); }
+  20% { transform: translate(-18px, 6px); }
+  50% { transform: translate(-4px, 9px); }
+  75% { transform: translate(6px, 4px); }
+}
+
+@keyframes dlr-reset-l {
+  0%, 100% { transform: translate(0, 0); }
+  40% { transform: translate(2px, -2px); }
+  70% { transform: translate(2px, 1px); }
+}
+
+@keyframes dlr-reset-r {
+  0%, 100% { transform: translate(0, 0); }
+  40% { transform: translate(-2px, -2px); }
+  70% { transform: translate(-2px, 1px); }
+}
