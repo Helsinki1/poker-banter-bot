@@ -24,7 +24,7 @@ export default function CharacterPicker({ initialSelected, onStart }: Props) {
   return (
     <div className="picker">
       <header className="picker-head">
-        <h1 className="picker-title">The Back Room</h1>
+        <h1 className="picker-title">Poker Banter</h1>
         <p className="picker-sub">Heads-up hold&rsquo;em, play-money only. Choose who sits across from you.</p>
       </header>
 

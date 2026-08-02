@@ -116,8 +116,12 @@ export interface GameSnapshot {
   resultText?: string;
   handResult?: HandResult;
   animationCue?: PokerAnimationCue;
-  /** True when a player is out of chips and the match is over. */
+  /** True when the PLAYER is out of chips — the opponent always re-buys. */
   matchOver: boolean;
+  /** Times the opponent has re-bought after busting this match. */
+  opponentRebuys: number;
+  /** Set on the hand where the opponent just re-bought (the buy-in amount). */
+  opponentRebuyAmount?: number;
 }
 
 export const SMALL_BLIND = 10;

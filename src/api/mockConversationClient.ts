@@ -5,8 +5,8 @@ import type {
 import type { OpponentId } from '../game/types';
 import { createRng } from '../game/deck';
 import {
-  emptyMemory, generateNpcLine, rememberHand, rememberTurn, VOICE_PROFILES,
-  type ConversationMemory, type NpcTrigger,
+  emptyMemory, generateNpcLine, npcPerspectiveResult, rememberHand, rememberTurn,
+  VOICE_PROFILES, type ConversationMemory, type NpcTrigger,
 } from './npcScript';
 import { streamBanterLine, cleanAssembledLine } from './llmBanter';
 import { TextChunker } from '../voice/chunker';
@@ -161,14 +161,17 @@ export class MockRealtimeConversationClient implements RealtimeConversationClien
     // Record completed hands once.
     if (snapshot.winner && snapshot.resultText && snapshot.handNumber > this.lastResultHand) {
       this.lastResultHand = snapshot.handNumber;
+      // The UI's resultText says "you"/"opponent" from the PLAYER's seat; the
+      // NPC prompt and its spoken recaps need the NPC's own perspective.
+      const headline = npcPerspectiveResult(snapshot.winner, snapshot.resultText);
       rememberHand(this.memory, {
         handNumber: snapshot.handNumber,
         winner: snapshot.winner,
         potWon: snapshot.pot,
         reason: snapshot.resultText.includes('fold') ? 'fold' : 'showdown',
-        headline: snapshot.resultText,
+        headline,
       });
-      this.scheduleResponse({ kind: 'hand-result', winner: snapshot.winner, resultText: snapshot.resultText }, 600);
+      this.scheduleResponse({ kind: 'hand-result', winner: snapshot.winner, resultText: headline }, 600);
       return;
     }
 

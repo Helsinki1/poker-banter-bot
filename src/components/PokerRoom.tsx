@@ -13,6 +13,7 @@ import type { OpponentSpriteProps, SpriteMood } from '../sprites/types';
 import CardView from './CardView';
 import ActionBar from './ActionBar';
 import VoiceDock from './VoiceDock';
+import { sanitizeName } from '../state/leaderboardCore';
 import './room.css';
 
 const SPRITES: Record<OpponentId, (p: OpponentSpriteProps) => React.ReactElement> = {
@@ -27,6 +28,46 @@ interface Props {
   convo: ConversationController;
   voiceDemo?: VoiceDemo;
   onLeave: () => void;
+  /** Cash out: post `score` to the leaderboard under `name`, leave the table. */
+  onCashOut: (name: string, score: number) => void;
+}
+
+/** Small name-entry dialog shown when the player cashes out (or busts). */
+function CashOutDialog({ score, onConfirm, onCancel }: {
+  score: number;
+  onConfirm: (name: string) => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState('');
+  const submit = () => onConfirm(sanitizeName(name));
+  return (
+    <div className="intro-overlay cashout-overlay" data-testid="cashout-dialog">
+      <div className="intro-card">
+        <span className="intro-name">{score > 0 ? 'Cash Out' : 'Busted'}</span>
+        <span className="cashout-score">
+          {score > 0 ? <>You leave with <strong>{score.toLocaleString()}</strong> chips.</> : 'The house keeps everything — but the board remembers.'}
+        </span>
+        <input
+          className="cashout-input"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+          placeholder="Your name"
+          maxLength={20}
+          autoFocus
+          data-testid="cashout-name"
+        />
+        <div className="cashout-actions">
+          <button className="next-hand-btn" onClick={submit} data-testid="cashout-confirm">
+            Add to Leaderboard
+          </button>
+          <button className="leave-btn cashout-cancel" onClick={onCancel} data-testid="cashout-cancel">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function chipTierFor(total: number): 0 | 1 | 2 | 3 {
@@ -36,11 +77,12 @@ function chipTierFor(total: number): 0 | 1 | 2 | 3 {
   return 0;
 }
 
-export default function PokerRoom({ opponentId, match, convo, voiceDemo, onLeave }: Props) {
+export default function PokerRoom({ opponentId, match, convo, voiceDemo, onLeave, onCashOut }: Props) {
   const ch = CHARACTER_MAP[opponentId];
   const Sprite = SPRITES[opponentId];
   const snap = match.snapshot;
   const [entered, setEntered] = useState(false);
+  const [cashingOut, setCashingOut] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setEntered(true), 60);
@@ -175,8 +217,18 @@ export default function PokerRoom({ opponentId, match, convo, voiceDemo, onLeave
         </span>
       </div>
 
-      <button className="leave-btn" onClick={onLeave} title="Leave the table" data-testid="leave">
+      <button className="leave-btn" onClick={onLeave} title="Leave the table (no score)" data-testid="leave">
         ⟵ Leave
+      </button>
+      {/* Cash out is only offered between hands — chips in a live pot are in play. */}
+      <button
+        className="cashout-btn"
+        onClick={() => setCashingOut(true)}
+        disabled={!(showIntro || handDone)}
+        title={showIntro || handDone ? 'Cash out and post your score' : 'Finish the hand to cash out'}
+        data-testid="cash-out"
+      >
+        ◆ Cash Out · {snap?.playerStack ?? 0}
       </button>
 
       {/* Board + pot */}
@@ -235,6 +287,11 @@ export default function PokerRoom({ opponentId, match, convo, voiceDemo, onLeave
               You: {snap.handResult.playerHandName} · {ch.name}: {snap.handResult.opponentHandName}
             </span>
           )}
+          {handDone && snap.opponentRebuyAmount !== undefined && (
+            <span className="rebuy-note" data-testid="rebuy-note">
+              {ch.name} is felted — and buys back in for {snap.opponentRebuyAmount.toLocaleString()}.
+            </span>
+          )}
           {handDone && !snap.matchOver && (
             <button className="next-hand-btn" onClick={match.nextHand} data-testid="next-hand">
               Next Hand ⟶
@@ -242,7 +299,10 @@ export default function PokerRoom({ opponentId, match, convo, voiceDemo, onLeave
           )}
           {handDone && snap.matchOver && (
             <div className="match-over">
-              <span>{snap.playerStack === 0 ? `${ch.name} has all the chips.` : 'You cleaned them out.'}</span>
+              <span>{ch.name} has all the chips.</span>
+              <button className="next-hand-btn" onClick={() => setCashingOut(true)} data-testid="post-score">
+                Post Score
+              </button>
               <button className="next-hand-btn" onClick={match.rematch} data-testid="rematch">Rematch</button>
             </div>
           )}
@@ -269,6 +329,14 @@ export default function PokerRoom({ opponentId, match, convo, voiceDemo, onLeave
       <div className="action-area">
         {snap && <ActionBar snapshot={snap} onAction={(t, a) => void match.submitPlayerAction(t, a)} />}
       </div>
+
+      {cashingOut && snap && (
+        <CashOutDialog
+          score={snap.playerStack}
+          onConfirm={(name) => onCashOut(name, snap.playerStack)}
+          onCancel={() => setCashingOut(false)}
+        />
+      )}
 
       <div className="vignette" />
     </div>

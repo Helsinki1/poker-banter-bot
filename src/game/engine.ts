@@ -38,6 +38,10 @@ export interface EngineState {
   handResult?: HandResult;
   animationCue: PokerAnimationCue;
   matchOver: boolean;
+  /** Times the opponent has busted and re-bought this match. */
+  opponentRebuys: number;
+  /** Buy-in amount when the opponent re-bought at the end of this hand. */
+  opponentRebuyAmount?: number;
   rngState: number;
 }
 
@@ -77,6 +81,7 @@ export function createMatch(opponentId: OpponentId, seed?: number): EngineState 
     actionLog: [],
     animationCue: null,
     matchOver: false,
+    opponentRebuys: 0,
     rngState: actualSeed,
   };
 }
@@ -106,6 +111,7 @@ export function startHand(s: EngineState): EngineState {
     actionLog: [],
     previousAction: undefined,
     handResult: undefined,
+    opponentRebuyAmount: undefined,
     handNumber,
     handId: `hand-${handNumber}`,
     animationCue: 'shuffle',
@@ -258,7 +264,17 @@ function awardPot(s: EngineState): EngineState {
     playerStack += potTotal - half; // odd chip to the player, deterministically
     opponentStack += half;
   }
-  const matchOver = playerStack === 0 || opponentStack === 0;
+  // Arcade format: a busted opponent re-buys at the player's current stack,
+  // so the game stays competitive however big the player runs it up. Only
+  // the player busting ends the match.
+  let opponentRebuys = s.opponentRebuys;
+  let opponentRebuyAmount: number | undefined;
+  if (opponentStack === 0 && playerStack > 0) {
+    opponentStack = playerStack;
+    opponentRebuys += 1;
+    opponentRebuyAmount = playerStack;
+  }
+  const matchOver = playerStack === 0;
   return {
     ...s,
     playerStack,
@@ -269,6 +285,8 @@ function awardPot(s: EngineState): EngineState {
     phase: 'hand-complete',
     animationCue: null,
     matchOver,
+    opponentRebuys,
+    opponentRebuyAmount,
   };
 }
 
@@ -512,5 +530,7 @@ export function snapshot(s: EngineState): GameSnapshot {
     handResult: s.handResult,
     animationCue: s.animationCue,
     matchOver: s.matchOver,
+    opponentRebuys: s.opponentRebuys,
+    opponentRebuyAmount: s.opponentRebuyAmount,
   };
 }

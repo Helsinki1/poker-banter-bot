@@ -212,10 +212,32 @@ describe('all-in behavior', () => {
     s = act(s, 'player', 'call');
     s = run(s);
     expect(s.phase).toBe('hand-complete');
-    // AA holds on this board: player doubles.
+    // AA holds on this board: player doubles, and the busted opponent
+    // immediately re-buys at the player's new stack (arcade format).
     expect(s.playerStack).toBe(STARTING_STACK * 2);
-    expect(s.opponentStack).toBe(0);
+    expect(s.opponentStack).toBe(STARTING_STACK * 2);
+    expect(s.matchOver).toBe(false);
+    expect(s.opponentRebuys).toBe(1);
+    expect(s.opponentRebuyAmount).toBe(STARTING_STACK * 2);
+    // The re-buy marker is transient: cleared once the next hand starts.
+    const next = startHand(s);
+    expect(next.opponentRebuyAmount).toBeUndefined();
+    expect(next.opponentRebuys).toBe(1);
+  });
+
+  it('ends the match only when the PLAYER busts — no re-buy for the player', () => {
+    let s = riggedHand(DECK);
+    // Swap hole cards so the opponent holds AA and the player 7-2.
+    s = { ...s, playerCards: s.opponentCards, opponentCards: s.playerCards };
+    s = act(s, 'opponent', 'all-in');
+    s = act(s, 'player', 'call');
+    s = run(s);
+    expect(s.phase).toBe('hand-complete');
+    expect(s.playerStack).toBe(0);
+    expect(s.opponentStack).toBe(STARTING_STACK * 2);
     expect(s.matchOver).toBe(true);
+    expect(s.opponentRebuys).toBe(0);
+    expect(s.opponentRebuyAmount).toBeUndefined();
   });
 
   it('caps the call at the shorter stack and refunds the excess', () => {

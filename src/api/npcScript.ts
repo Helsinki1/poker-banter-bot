@@ -58,6 +58,25 @@ export function rememberHand(m: ConversationMemory, summary: HandSummary): void 
   while (m.handSummaries.length > MAX_HAND_SUMMARIES) m.handSummaries.shift();
 }
 
+/**
+ * Rewrite the UI's player-perspective result text ("Opponent folds — you take
+ * the pot.") into the NPC's own first-person voice. Both the LLM prompt and
+ * the spoken "last hand" recaps use this, so folds and wins are attributed to
+ * the correct side — the NPC must never mock the player for the NPC's own fold.
+ */
+export function npcPerspectiveResult(
+  winner: 'player' | 'opponent' | 'split',
+  resultText: string,
+): string {
+  if (winner === 'split') return resultText; // already symmetric
+  const hand = /with (.+)\.$/.exec(resultText)?.[1] ?? 'the better hand';
+  const byFold = /fold/i.test(resultText);
+  if (winner === 'opponent') {
+    return byFold ? 'the player folded and I took the pot' : `I won the showdown with ${hand}`;
+  }
+  return byFold ? 'I folded and the player took the pot' : `the player won the showdown with ${hand}`;
+}
+
 export type NpcTrigger =
   | { kind: 'greeting' }
   | { kind: 'player-utterance'; text: string }

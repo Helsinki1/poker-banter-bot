@@ -3,7 +3,7 @@ import { MockRealtimeConversationClient } from './mockConversationClient';
 import type { NpcConversationState, PublicGameSnapshot } from './conversationClient';
 import { toPublicSnapshot } from './conversationClient';
 import { MockPokerGameClient } from './pokerClient';
-import { MAX_HAND_SUMMARIES, MAX_TURNS } from './npcScript';
+import { MAX_HAND_SUMMARIES, MAX_TURNS, npcPerspectiveResult } from './npcScript';
 
 function baseSnapshot(overrides: Partial<PublicGameSnapshot> = {}): PublicGameSnapshot {
   return {
@@ -304,5 +304,30 @@ describe('public snapshot stripping', () => {
     for (const card of snap.playerCards) {
       expect(json).not.toContain(`"${card.rank}${card.suit}"`);
     }
+  });
+});
+
+describe('npcPerspectiveResult', () => {
+  it("attributes the NPC's own fold to the NPC, not the player", () => {
+    // Opponent folded → winner is the player; the NPC must say "I folded".
+    const text = npcPerspectiveResult('player', 'Opponent folds — you take the pot.');
+    expect(text).toBe('I folded and the player took the pot');
+  });
+
+  it("attributes the player's fold to the player", () => {
+    const text = npcPerspectiveResult('opponent', 'You fold — opponent takes the pot.');
+    expect(text).toBe('the player folded and I took the pot');
+  });
+
+  it('rewrites showdown wins for each side and keeps the hand name', () => {
+    expect(npcPerspectiveResult('player', 'You win with Pair of Aces.'))
+      .toBe('the player won the showdown with Pair of Aces');
+    expect(npcPerspectiveResult('opponent', 'Opponent wins with Two Pair, Kings and Fours.'))
+      .toBe('I won the showdown with Two Pair, Kings and Fours');
+  });
+
+  it('leaves split pots untouched (already symmetric)', () => {
+    const split = 'Split pot — both show Pair of Nines.';
+    expect(npcPerspectiveResult('split', split)).toBe(split);
   });
 });

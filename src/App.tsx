@@ -3,12 +3,15 @@ import type { OpponentId } from './game/types';
 import { useMatch } from './state/useMatch';
 import { useConversation } from './state/useConversation';
 import { setActivePokerPersona } from './game/personas';
+import { addLeaderboardEntry } from './state/leaderboard';
+import LeaderboardScreen from './components/LeaderboardScreen';
 import CharacterPicker from './components/CharacterPicker';
 import PokerRoom from './components/PokerRoom';
 import { activeScene } from './scenes';
 import './app.css';
 
 type View =
+  | { kind: 'home'; highlight?: { name: string; score: number } }
   | { kind: 'picker' }
   | { kind: 'entering'; opponentId: OpponentId }
   | { kind: 'room'; opponentId: OpponentId };
@@ -21,7 +24,8 @@ export default function App() {
     if (scene?.config.view === 'room' && scene.config.opponentId) {
       return { kind: 'room', opponentId: scene.config.opponentId };
     }
-    return { kind: 'picker' };
+    if (scene?.config.view === 'picker') return { kind: 'picker' };
+    return { kind: 'home' };
   });
 
   const opponentId = view.kind === 'room' || view.kind === 'entering' ? view.opponentId : null;
@@ -53,13 +57,25 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scene, phase]);
 
+  // Leaving without cashing out forfeits the score — back to the board.
   const handleLeave = useCallback(() => {
     convo.disableVoice();
-    setView({ kind: 'picker' });
+    setView({ kind: 'home' });
   }, [convo]);
+
+  // Cash out: the current stack becomes a leaderboard score, then the board
+  // greets the next player with the fresh entry spotlighted.
+  const handleCashOut = useCallback(async (name: string, score: number) => {
+    convo.disableVoice();
+    if (opponentId) await addLeaderboardEntry({ name, opponentId, score });
+    setView({ kind: 'home', highlight: { name, score } });
+  }, [convo, opponentId]);
 
   return (
     <div className="app-shell">
+      {view.kind === 'home' && (
+        <LeaderboardScreen onPlay={() => setView({ kind: 'picker' })} highlight={view.highlight} />
+      )}
       {view.kind === 'picker' && (
         <CharacterPicker initialSelected={scene?.config.pickerSelected} onStart={handleStart} />
       )}
@@ -71,6 +87,7 @@ export default function App() {
           convo={convo}
           voiceDemo={scene?.config.voiceDemo}
           onLeave={handleLeave}
+          onCashOut={handleCashOut}
         />
       )}
     </div>

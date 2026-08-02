@@ -217,7 +217,7 @@
   position: absolute;
   top: 14px;
   right: 16px;
-  z-index: 6;
+  z-index: 11; /* above the intro overlay: leaving/cashing out is always allowed between hands */
   background: var(--charcoal);
   color: var(--parchment-dim);
   border: 2px solid var(--walnut);
@@ -227,6 +227,30 @@
 }
 
 .leave-btn:hover { color: var(--parchment); border-color: var(--brass); }
+
+.cashout-btn {
+  position: absolute;
+  top: 14px;
+  right: 104px;
+  z-index: 11; /* above the intro overlay, below the cash-out dialog */
+  background: var(--charcoal);
+  color: var(--lamplight);
+  border: 2px solid var(--brass);
+  padding: 6px 12px;
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+
+.cashout-btn:hover:not(:disabled) {
+  box-shadow: 0 0 14px rgba(242, 194, 107, 0.25);
+  color: var(--parchment);
+}
+
+.cashout-btn:disabled {
+  opacity: 0.4;
+  color: var(--parchment-dim);
+  border-color: var(--walnut);
+}
 
 /* --- board + pot -------------------------------------------------------------- */
 
@@ -539,6 +563,51 @@
   gap: 6px;
   color: var(--parchment);
 }
+
+.rebuy-note {
+  font-size: 13px;
+  color: var(--lamplight);
+  font-style: italic;
+}
+
+/* --- cash-out dialog ---------------------------------------------------------- */
+
+/* Unlike the intro, the dialog must not inherit banner-in's horizontal slide
+   (double class outranks the later .intro-overlay animation rule). */
+.intro-overlay.cashout-overlay { z-index: 12; animation: cashout-in 250ms ease backwards; }
+
+@keyframes cashout-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.cashout-score { font-size: 14px; color: var(--parchment); }
+.cashout-score strong { color: var(--lamplight); }
+
+.cashout-input {
+  width: 220px;
+  padding: 8px 12px;
+  font-size: 15px;
+  letter-spacing: 1px;
+  text-align: center;
+  color: var(--parchment);
+  background: var(--ink);
+  border: 2px solid var(--walnut);
+}
+
+.cashout-input:focus {
+  outline: none;
+  border-color: var(--brass);
+  box-shadow: 0 0 12px rgba(242, 194, 107, 0.2);
+}
+
+.cashout-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cashout-cancel { position: static; }
 
 /* --- intro overlay ------------------------------------------------------------------------ */
 

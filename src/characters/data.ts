@@ -3,6 +3,8 @@ import type { OpponentId } from '../game/types';
 export interface CharacterInfo {
   id: OpponentId;
   name: string;
+  /** Short label for compact spots like the leaderboard's opponent column. */
+  shortName: string;
   tagline: string;
   pokerStyle: string;
   difficulty: 1 | 2 | 3;
@@ -16,6 +18,7 @@ export const CHARACTERS: CharacterInfo[] = [
   {
     id: 'einstein',
     name: 'The Professor',
+    shortName: 'Dana',
     tagline: 'Treats every bet as a hypothesis begging to be tested.',
     pokerStyle: 'Balanced & deliberate — varied sizing, few wild swings.',
     difficulty: 2,
@@ -27,6 +30,7 @@ export const CHARACTERS: CharacterInfo[] = [
   {
     id: 'lebron',
     name: 'The King of Courts',
+    shortName: 'Lebron',
     tagline: 'Plays every pot like the fourth quarter.',
     pokerStyle: 'Assertive & pressure-oriented — big raises, keeps momentum.',
     difficulty: 3,
@@ -38,6 +42,7 @@ export const CHARACTERS: CharacterInfo[] = [
   {
     id: 'trump',
     name: 'The Dealmaker',
+    shortName: 'Trump',
     tagline: 'Every pot is a deal — and he never loses a deal. Just ask him.',
     pokerStyle: 'Bold & bombastic — huge bets, huge bluffs, never backs down.',
     difficulty: 3,
