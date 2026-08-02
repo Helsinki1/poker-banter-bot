@@ -22,7 +22,7 @@ function run(s: EngineState, max = 30): EngineState {
 
 /** Start a hand with a rigged deck (dealt: non-button, button, non-button, button, burn, flop x3, burn, turn, burn, river). */
 function riggedHand(deck: Card[], seed = 42): EngineState {
-  let s = createMatch('einstein', seed);
+  let s = createMatch('dana', seed);
   s = startHand(s); // phase: shuffling
   s = { ...s, deck };
   return run(s);

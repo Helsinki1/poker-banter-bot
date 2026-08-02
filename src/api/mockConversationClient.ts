@@ -346,7 +346,7 @@ export class MockRealtimeConversationClient implements RealtimeConversationClien
   private activeTimersMisc: ReturnType<typeof setTimeout>[] = [];
 
   private voice() {
-    return VOICE_PROFILES[(this.context?.opponentId ?? 'einstein') as OpponentId];
+    return VOICE_PROFILES[(this.context?.opponentId ?? 'dana') as OpponentId];
   }
 
   private setState(s: NpcConversationState): void {

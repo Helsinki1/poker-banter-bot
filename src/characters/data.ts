@@ -16,16 +16,16 @@ export interface CharacterInfo {
 
 export const CHARACTERS: CharacterInfo[] = [
   {
-    id: 'einstein',
-    name: 'The Professor',
+    id: 'dana',
+    name: 'Dana Schafer Smith',
     shortName: 'Dana',
-    tagline: 'Treats every bet as a hypothesis begging to be tested.',
-    pokerStyle: 'Balanced & deliberate — varied sizing, few wild swings.',
-    difficulty: 2,
-    difficultyLabel: 'Calculating',
-    motif: 'chalk equations',
-    introLine: 'Ah — a new experiment. Do sit down.',
-    accent: '#8fb6c9',
+    tagline: 'The warmest smile at the table — right up until she calls you down.',
+    pokerStyle: 'Patient & honest — friendly chat, sensible bets, no theatrics.',
+    difficulty: 1,
+    difficultyLabel: 'Welcoming',
+    motif: 'floating hearts',
+    introLine: "Hi! Come sit — I saved you the good seat.",
+    accent: '#6fc2b4',
   },
   {
     id: 'lebron',

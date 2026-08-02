@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import type { OpponentId } from '../game/types';
 import { CHARACTERS } from '../characters/data';
-import EinsteinSprite from '../sprites/EinsteinSprite';
+import DanaSprite from '../sprites/DanaSprite';
 import LebronSprite from '../sprites/LebronSprite';
 import TrumpSprite from '../sprites/TrumpSprite';
 import type { OpponentSpriteProps } from '../sprites/types';
 import './picker.css';
 
 const SPRITES: Record<OpponentId, (p: OpponentSpriteProps) => React.ReactElement> = {
-  einstein: EinsteinSprite,
+  dana: DanaSprite,
   lebron: LebronSprite,
   trump: TrumpSprite,
 };

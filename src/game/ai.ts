@@ -211,7 +211,7 @@ export function decideOpponentAction(s: EngineState): PokerAction {
 /** Character-flavored think time in ms (bounded so hands never stall). */
 export function thinkTimeMs(opponentId: OpponentId, rand: number): number {
   switch (opponentId) {
-    case 'einstein': return 900 + rand * 1400; // deliberate
+    case 'dana': return 700 + rand * 1000; // unhurried, friendly
     case 'lebron': return 450 + rand * 650; // decisive
     case 'trump': return 500 + rand * 700; // decisive, impatient
   }

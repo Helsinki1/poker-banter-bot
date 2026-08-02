@@ -4,7 +4,7 @@ import { CHARACTER_MAP } from '../characters/data';
 import type { MatchController } from '../state/useMatch';
 import type { ConversationController } from '../state/useConversation';
 import type { VoiceDemo } from '../scenes';
-import EinsteinSprite from '../sprites/EinsteinSprite';
+import DanaSprite from '../sprites/DanaSprite';
 import LebronSprite from '../sprites/LebronSprite';
 import TrumpSprite from '../sprites/TrumpSprite';
 import DealerSprite from '../sprites/DealerSprite';
@@ -17,7 +17,7 @@ import { sanitizeName } from '../state/leaderboardCore';
 import './room.css';
 
 const SPRITES: Record<OpponentId, (p: OpponentSpriteProps) => React.ReactElement> = {
-  einstein: EinsteinSprite,
+  dana: DanaSprite,
   lebron: LebronSprite,
   trump: TrumpSprite,
 };

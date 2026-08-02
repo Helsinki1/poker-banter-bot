@@ -6,7 +6,7 @@ import type { PublicGameSnapshot, VoiceProfile } from './conversationClient';
 // to be the real person and never uses attributed quotations.
 
 export const VOICE_PROFILES: Record<OpponentId, VoiceProfile> = {
-  einstein: { pitch: 1.25, rate: 0.92, voiceHint: ['Daniel', 'Fred', 'Google UK English Male'] },
+  dana: { pitch: 1.15, rate: 1.0, voiceHint: ['Samantha', 'Victoria', 'Google US English'] },
   lebron: { pitch: 0.75, rate: 1.0, voiceHint: ['Aaron', 'Alex', 'Google US English'] },
   trump: { pitch: 0.88, rate: 0.98, voiceHint: ['Aaron', 'Alex', 'Google US English'] },
 };
@@ -112,72 +112,72 @@ interface CharacterScript {
 }
 
 const SCRIPTS: Record<OpponentId, CharacterScript> = {
-  einstein: {
+  dana: {
     greeting: [
-      'Ah, a new experiment begins. Please, sit — the cards are simply probability made visible.',
-      'Welcome. Every hand is a hypothesis; let us see which of us tests theirs better.',
+      "Hi! I'm so glad you sat down — I was hoping for good company tonight.",
+      'Welcome, welcome! Grab a seat, get comfy. I promise this will be fun.',
     ],
     streetComment: (street, snap) => [
-      `The ${street} changes our little probability space, does it not?`,
-      `Interesting. With ${snap.communityCards.length} cards showing, the uncertainty narrows.`,
-      `Each card is new evidence. I do enjoy evidence.`,
+      `Ooh, the ${street}! I love this part — anything can happen.`,
+      `Look at that board. ${snap.communityCards.length} cards up and I'm still smiling — make of that what you will.`,
+      'New card! Isn\'t this exciting?',
     ],
     playerAggro: [
-      'A bold wager. Bold hypotheses are how we learn — usually at some cost.',
-      'Aggression as a variable. I shall have to account for it.',
-      'You bet like someone testing whether I am paying attention. I am.',
+      "Oh my, a big bet! Look at you go. I'll think it over — nicely, of course.",
+      "Someone's feeling brave! I love that for you. Let me see...",
+      "A raise? You're keeping me on my toes — that's my favorite kind of game.",
     ],
     playerPassive: [
-      'Caution. Sensible, though caution reveals information too.',
-      'A quiet move. Quiet data is still data.',
+      'A gentle check. See, we can keep this civilized.',
+      "Taking it slow? Honestly, same. No rush at this table.",
     ],
     playerFolded: [
-      'A retreat can be the most rational move on the table.',
-      'You preserved your chips. Preservation is underrated.',
+      "Aw, folding? That's okay — sometimes the kindest thing you can do is let a hand go.",
+      'Good instinct! Saving your chips for a better spot.',
     ],
     win: [
-      'The hypothesis held! Forgive my smile — confirmation is a rare pleasure.',
-      'The numbers were kind to me that time.',
+      'Oh! I won that one! Sorry — I mean, thank you. That was fun!',
+      "Yay, my pot!",
     ],
     loss: [
-      'Hm. The universe enjoys correcting me. Well played.',
-      'An unexpected result. Those are the instructive ones.',
+      'That was so well played! Take the chips — you earned every one.',
+      "You got me! Honestly, I'm a little impressed. Nice hand!",
     ],
-    split: ['A perfectly symmetric outcome. How elegant.', 'We split it — equilibrium, of a sort.'],
-    yourTurn: ['The decision is yours. Take your time — I am watching the variables.', 'Your move. What will the data show?'],
+    split: ['We split it! Sharing is caring, right?', 'A tie! Honestly, the friendliest possible outcome.'],
+    yourTurn: ["Your turn! No pressure — take all the time you need. I'll wait... patiently-ish.", "It's on you! I'll just be here, smiling mysteriously."],
     bluffAccusation: [
-      'Bluffing? I merely present incomplete information with confidence.',
-      'If you are certain I am bluffing, the bet button is right there. Certainty deserves testing.',
+      "Me, bluff? I have the most honest face at this table. ...Which is exactly what a bluffer would say, huh?",
+      "You think I'm bluffing? There's a very friendly way to find out.",
     ],
-    compliment: ['You are kind. Luck flatters preparation.', 'Thank you. Though I suspect flattery is a strategy.'],
+    compliment: ["Aw, you're the sweetest! Flattery gets you everywhere — except my chips.", 'Thank you! See, poker CAN be nice.'],
     luckTalk: [
-      'Luck is probability taken personally, my friend.',
-      'The deck has no memory — only we do.',
+      'Luck? Maybe a little. I prefer to think the deck just likes me.',
+      "The cards even out eventually — being nice to the dealer can't hurt though.",
     ],
     whatDoIHave: [
-      'What do you have? A superposition of possibilities until you show me.',
-      'I could guess, but a good experimentalist never announces results early.',
+      "My cards? They're lovely, thanks for asking! That's all you get.",
+      "Wouldn't you like to know! Stick around for showdown and I'll show you everything.",
     ],
     actionWords: [
-      'Saying it aloud does nothing here — the buttons are the only instruments that count.',
-      'Words are not wagers. If you mean it, press it.',
+      "Saying it out loud doesn't count — the buttons are right down there, whenever you find your nerve.",
+      "Talk is lovely, but the game only listens to clicks. Whenever you're ready!",
     ],
-    potQuestion: (snap) => [`The pot stands at ${snap.pot} chips. A tidy sum of our disagreements.`],
+    potQuestion: (snap) => [`There's ${snap.pot} chips in the middle. A nice little nest egg, isn't it?`],
     turnQuestion: (snap) => [
-      snap.activePlayer === 'player' ? 'It is your decision, in fact.' : 'The move is mine — patience.',
+      snap.activePlayer === 'player' ? "It's your turn, actually! Take your time." : "It's me! Thinking, thinking...",
     ],
     lastHand: (m) => {
       const last = m.handSummaries[m.handSummaries.length - 1];
       return last
-        ? [`Last hand? ${last.headline} — ${last.potWon} chips changed hands.`]
-        : ['We have no history yet. Delightful — a blank notebook.'];
+        ? [`Last hand? ${last.headline} — ${last.potWon} chips! Still one of my favorite memories of us.`]
+        : ["We haven't even played a hand yet! Clean slate — I love a clean slate."];
     },
     generic: [
-      'Curious. Do go on.',
-      'An interesting thought. The cards, however, remain indifferent.',
-      'I am listening — and calculating, always both.',
+      "That's so interesting — tell me more!",
+      'I could chat all night. The cards can wait a second.',
+      "You're fun to play with, you know that?",
     ],
-    fallback: ['Forgive me, I was lost in a calculation. You were saying?'],
+    fallback: ["Sorry, I got distracted admiring the felt — what were you saying?"],
   },
   lebron: {
     greeting: [

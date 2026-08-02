@@ -10,7 +10,7 @@ function baseSnapshot(overrides: Partial<PublicGameSnapshot> = {}): PublicGameSn
     matchId: 'm1',
     handId: 'hand-1',
     handNumber: 1,
-    opponentId: 'einstein',
+    opponentId: 'dana',
     phase: 'flop-player-action',
     street: 'flop',
     communityCards: ['5s', '10d', '3c'],
@@ -44,7 +44,7 @@ describe('MockRealtimeConversationClient', () => {
   });
 
   async function connect() {
-    const p = client.connect({ opponentId: 'einstein', snapshot: baseSnapshot() });
+    const p = client.connect({ opponentId: 'dana', snapshot: baseSnapshot() });
     await vi.advanceTimersByTimeAsync(1200);
     await p;
   }

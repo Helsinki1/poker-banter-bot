@@ -9,7 +9,7 @@ export interface Card {
   suit: Suit;
 }
 
-export type OpponentId = 'einstein' | 'lebron' | 'trump';
+export type OpponentId = 'dana' | 'lebron' | 'trump';
 
 export type Seat = 'player' | 'opponent';
 
