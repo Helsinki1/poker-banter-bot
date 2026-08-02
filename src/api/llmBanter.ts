@@ -3,36 +3,82 @@ import type { NpcTrigger, ConversationMemory } from './npcScript';
 import type { PublicGameSnapshot } from './conversationClient';
 import type { NpcVoice } from '../voice/cartesiaTts';
 import { BIG_BLIND } from '../game/types';
+import {
+  type CompletionWindow,
+  type LlmModelOption,
+  apiKeyFor,
+  baseUrlFor,
+  findModel,
+  loadSelectedModelId,
+  resolveWindow,
+} from './llmProviders';
 
-// LLM-generated table talk (OpenAI). Produces ONE short in-character line per
-// trigger. The model only ever sees the PUBLIC game snapshot (no hole cards,
-// no deck), so it can bluff and needle but can never actually know anything
-// hidden — the psychological warfare is prompt-deep, not information-deep.
-// Returns null when no API key is configured or the call fails; callers fall
-// back to the scripted lines so the game never blocks on the network.
+// LLM-generated table talk. Produces ONE short in-character line per trigger.
+// The model only ever sees the PUBLIC game snapshot (no hole cards, no deck),
+// so it can bluff and needle but can never actually know anything hidden — the
+// psychological warfare is prompt-deep, not information-deep.
+//
+// The backend is interchangeable (see llmProviders): OpenAI or any Sail
+// Research model, selected at runtime. Yields nothing when no key is
+// configured or the call fails, so callers fall back to the scripted lines and
+// the game never blocks on the network.
 
-export function getOpenAiApiKey(): string {
-  // Never call the network from tests (vitest loads .env, so a real key
-  // would otherwise leak into fake-timer test runs and hang them).
-  if (import.meta.env.MODE === 'test') return '';
-  return (import.meta.env.VITE_OPENAI_API_KEY as string | undefined)?.trim() ?? '';
-}
-
-// A non-reasoning model is essential here: reasoning models spend hidden
-// tokens before the first visible one, which is dead air at the table. Table
-// talk needs speed, not deliberation.
-const MODEL = (import.meta.env.VITE_OPENAI_MODEL as string | undefined)?.trim() || 'gpt-4.1-mini';
+export { getOpenAiApiKey } from './llmProviders';
 
 // One line of table talk is capped at 30 words by the prompt; a tight token
 // ceiling bounds the worst case when the model ignores that.
 const MAX_TOKENS = 60;
 
-let client: OpenAI | null = null;
-function getClient(apiKey: string): OpenAI {
+/**
+ * Reasoning models burn tokens before speaking; they need room for both, or
+ * the budget runs out mid-deliberation and the line comes back empty. Measured
+ * on Kimi: 1598 reasoning tokens for a 13-word line at default effort, 592 at
+ * `low`. Models with reasoning switched off never get near this.
+ */
+const REASONING_MAX_TOKENS = 4_096;
+
+/**
+ * Sail tier for live banter. Only `asap` is usable: `priority` averages ~1
+ * minute and `standard` ~5, which is not a conversation. Overridable so the
+ * cheaper tiers can be measured deliberately.
+ */
+const SAIL_WINDOW: CompletionWindow =
+  ((import.meta.env.VITE_SAIL_COMPLETION_WINDOW as string | undefined)?.trim() as CompletionWindow) || 'asap';
+
+/** Which backend generates the next line. Swappable mid-match. */
+let selectedModelId = loadSelectedModelId();
+
+export function setBanterModel(id: string): void {
+  if (id === selectedModelId) return;
+  selectedModelId = id;
+  clients.clear(); // next call rebuilds against the new base URL/key
+}
+
+export function getBanterModel(): LlmModelOption {
+  return findModel(selectedModelId);
+}
+
+// One client per provider, keyed by base URL so switching models does not
+// re-handshake a backend we already have open.
+const clients = new Map<string, OpenAI>();
+function getClient(model: LlmModelOption, apiKey: string): OpenAI {
+  const baseURL = baseUrlFor(model);
+  let client = clients.get(baseURL);
   if (!client) {
     // Browser call is intentional: local single-player game, the player's own key.
-    // Short timeout: a slow response is worse than a scripted line.
-    client = new OpenAI({ apiKey, dangerouslyAllowBrowser: true, maxRetries: 0, timeout: 8_000 });
+    // Reasoning models on a throughput-optimised backend need a longer leash
+    // than GPT does, but a slow line is still worse than a scripted one.
+    client = new OpenAI({
+      apiKey,
+      baseURL,
+      dangerouslyAllowBrowser: true,
+      maxRetries: 0,
+      // Measured: Kimi K2.6 on `asap` takes 16-32s to its first spoken token,
+      // so a 20s ceiling cut off valid replies. This is generous enough to let
+      // one through; the scripted line covers whatever still times out.
+      timeout: model.provider === 'sail' ? 45_000 : 8_000,
+    });
+    clients.set(baseURL, client);
   }
   return client;
 }
@@ -182,16 +228,31 @@ export async function* streamBanterLine(
   snapshot: PublicGameSnapshot | null,
   signal?: AbortSignal,
 ): AsyncGenerator<string, void, void> {
-  const apiKey = getOpenAiApiKey();
+  const model = getBanterModel();
+  const apiKey = apiKeyFor(model);
   if (!apiKey) return;
 
   let stream;
   try {
-    stream = await getClient(apiKey).chat.completions.create({
-      model: MODEL,
-      max_completion_tokens: MAX_TOKENS,
+    stream = await getClient(model, apiKey).chat.completions.create({
+      model: model.model,
+      // A reasoning model spends tokens thinking before it writes anything. At
+      // MAX_TOKENS the whole budget can go to reasoning and produce an empty
+      // line, so give it headroom — the prompt still caps the spoken line, and
+      // the streaming loop enforces its own 240-char ceiling. Once reasoning is
+      // switched off entirely the tight ceiling is safe again.
+      max_completion_tokens:
+        model.reasoning && model.reasoningEffort !== 'none' ? REASONING_MAX_TOKENS : MAX_TOKENS,
       stream: true,
       messages: buildMessages(characterName, voice, trigger, memory, snapshot),
+      // Sail routes by service tier; `asap` is the only conversational one.
+      ...(model.provider === 'sail'
+        ? { metadata: { completion_window: resolveWindow(model, SAIL_WINDOW) } }
+        : {}),
+      // Reasoning is the whole latency story on Sail. Left on, Kimi spends the
+      // entire token budget deliberating (often emitting NO spoken line at all,
+      // 26-49s); off, the same line arrives in ~1.4s.
+      ...(model.reasoningEffort ? { reasoning_effort: model.reasoningEffort } : {}),
     }, { signal });
   } catch {
     return; // scripted lines carry the conversation
@@ -202,6 +263,10 @@ export async function* streamBanterLine(
   try {
     for await (const part of stream) {
       if (signal?.aborted) return;
+      // Reasoning models stream their chain-of-thought on a separate field
+      // (`reasoning_content` / `reasoning`). It must never reach the TTS — the
+      // NPC would speak its own deliberation out loud. Only `content` is
+      // spoken; anything else is silently discarded.
       let delta = part.choices[0]?.delta?.content ?? '';
       if (!delta) continue;
       if (!sawText) {

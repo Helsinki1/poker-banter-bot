@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ConversationController, MicMode } from '../state/useConversation';
 import { NPC_VOICE_OPTIONS, type NpcVoice } from '../voice/cartesiaTts';
+import { LLM_MODEL_OPTIONS, isModelUsable } from '../api/llmProviders';
 import type { VoiceDemo } from '../scenes';
 import {
   ConnectionIcon, KeyboardIcon, MicIcon, MicMutedIcon, SpeakerIcon,
@@ -138,6 +139,28 @@ export default function VoiceDock({ convo, demo }: Props) {
           {NPC_VOICE_OPTIONS.map((v) => (
             <option key={v.id} value={v.id}>{v.label}</option>
           ))}
+        </select>
+        <select
+          className="vc-mode"
+          value={convo.banterModelId}
+          onChange={(e) => convo.setBanterModelId(e.target.value)}
+          aria-label="Banter model"
+          title="Which model writes the trash talk"
+          data-testid="banter-model"
+        >
+          {LLM_MODEL_OPTIONS.map((m) => {
+            const usable = isModelUsable(m);
+            return (
+              <option
+                key={m.id}
+                value={m.id}
+                disabled={!usable}
+                title={usable ? m.note : `Set ${m.provider === 'sail' ? 'VITE_SAIL_API_KEY' : 'VITE_OPENAI_API_KEY'} to use this`}
+              >
+                {m.label}{usable ? '' : ' (no key)'}
+              </option>
+            );
+          })}
         </select>
         <select
           className="vc-mode"
