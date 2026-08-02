@@ -8,6 +8,9 @@ import {
   emptyMemory, generateNpcLine, rememberHand, rememberTurn, VOICE_PROFILES,
   type ConversationMemory, type NpcTrigger,
 } from './npcScript';
+import { generateBanterLine } from './llmBanter';
+import { CHARACTER_MAP } from '../characters/data';
+import type { NpcVoice } from '../voice/cartesiaTts';
 
 // Local mock of the realtime conversation backend. Demonstrates the complete
 // streaming interaction loop with no production credentials:
@@ -45,6 +48,7 @@ export class MockRealtimeConversationClient implements RealtimeConversationClien
   private snapshot: PublicGameSnapshot | null = null;
   private micEnabled = false;
   private npcAudioEnabled = true;
+  private npcVoice: NpcVoice = 'normal';
   private memory: ConversationMemory = emptyMemory();
   private rng: () => number;
   private latencyScale: number;
@@ -94,6 +98,11 @@ export class MockRealtimeConversationClient implements RealtimeConversationClien
     this.npcAudioEnabled = enabled;
   }
 
+  /** Persona for LLM banter — follows the voice picked in the Voice Dock. */
+  setNpcVoice(voice: NpcVoice): void {
+    this.npcVoice = voice;
+  }
+
   // --- game context --------------------------------------------------------
 
   updateGameContext(snapshot: PublicGameSnapshot): void {
@@ -112,6 +121,7 @@ export class MockRealtimeConversationClient implements RealtimeConversationClien
     const act = snapshot.previousAction;
     if (act && act.seat === 'player' && act !== prev?.previousAction) {
       if (act.type === 'bet' || act.type === 'raise' || act.type === 'all-in') this.memory.playerAggressiveActions++;
+      else if (act.type === 'fold') this.memory.playerFolds++;
       else this.memory.playerPassiveActions++;
     }
     this.memory.biggestPotSeen = Math.max(this.memory.biggestPotSeen, snapshot.pot);
@@ -248,8 +258,6 @@ export class MockRealtimeConversationClient implements RealtimeConversationClien
 
     const id = `resp-${++this.responseCounter}`;
     const opponentId = this.context.opponentId;
-    const line = generateNpcLine(opponentId, trigger, this.memory, this.snapshot, this.rng);
-    rememberTurn(this.memory, 'npc', line);
 
     const response = {
       id,
@@ -260,20 +268,41 @@ export class MockRealtimeConversationClient implements RealtimeConversationClien
     this.activeResponse = response;
     this.setState('thinking');
 
-    const words = line.split(/\s+/);
-    let elapsed = thinkMs * this.latencyScale;
-
-    // Response start → speaking.
+    // "Thinking" covers the LLM round trip; the scripted line is the
+    // guaranteed fallback so the table never goes silent.
     response.timers.push(setTimeout(() => {
       if (this.activeResponse?.id !== id) return;
-      this.setState('speaking');
-      // Audio begins with the FIRST safe chunk, before full text exists.
-      if (this.npcAudioEnabled) {
-        emit(this.npcAudioE, { kind: 'tts', responseId: id, text: line, voice: this.voice(), last: false });
-      }
-    }, elapsed));
+      void this.speakResponse(id, response, opponentId, trigger);
+    }, thinkMs * this.latencyScale));
+  }
+
+  private async speakResponse(
+    id: string,
+    response: { id: string; timers: ReturnType<typeof setTimeout>[] },
+    opponentId: OpponentId,
+    trigger: NpcTrigger,
+  ): Promise<void> {
+    let line: string | null = null;
+    try {
+      line = await generateBanterLine(
+        CHARACTER_MAP[opponentId].name, this.npcVoice, trigger, this.memory, this.snapshot,
+      );
+    } catch {
+      line = null;
+    }
+    if (this.activeResponse?.id !== id) return; // interrupted while generating
+    if (!line) line = generateNpcLine(opponentId, trigger, this.memory, this.snapshot, this.rng);
+    rememberTurn(this.memory, 'npc', line);
+
+    this.setState('speaking');
+    // Audio begins with the FIRST safe chunk, before full text exists.
+    if (this.npcAudioEnabled) {
+      emit(this.npcAudioE, { kind: 'tts', responseId: id, text: line, voice: this.voice(), last: false });
+    }
 
     // Stream text word by word.
+    const words = line.split(/\s+/);
+    let elapsed = 0;
     let acc = '';
     words.forEach((w) => {
       elapsed += (45 + this.rng() * 40) * this.latencyScale;
@@ -285,10 +314,11 @@ export class MockRealtimeConversationClient implements RealtimeConversationClien
     });
 
     // Completion.
+    const finalLine = line;
     elapsed += 120 * this.latencyScale;
     response.timers.push(setTimeout(() => {
       if (this.activeResponse?.id !== id) return;
-      emit(this.npcTranscriptE, { text: line, final: true, responseId: id });
+      emit(this.npcTranscriptE, { text: finalLine, final: true, responseId: id });
       emit(this.npcAudioE, { kind: 'tts', responseId: id, text: '', voice: this.voice(), last: true });
       this.activeResponse = null;
       this.setState(this.micEnabled ? 'listening' : 'connected');
