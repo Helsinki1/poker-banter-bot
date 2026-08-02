@@ -131,6 +131,21 @@ describe('streamBanterLine backend selection', () => {
     expect(created.mock.calls[0][0].model).toBe('gpt-4.1');
   });
 
+  it('selects the post-trained adapter without changing the model id', async () => {
+    vi.stubEnv('VITE_SAIL_LORA', 'pokerbench-sft-v1');
+    created.mockReturnValue(textDeltas('You play like the math is optional.'));
+    await collect('sail-kimi-k2.6-lora');
+    const body = created.mock.calls[0][0];
+    expect(body.model).toBe('moonshotai/Kimi-K2.6');
+    // `asap` here is a hard 400 ("lora requests cannot use
+    // completion_window=asap"), which would drop every line to the script.
+    expect(body.metadata).toEqual({
+      completion_window: 'priority',
+      lora: 'pokerbench-sft-v1',
+    });
+    vi.unstubAllEnvs();
+  });
+
   it('falls through silently when the backend fails', async () => {
     // The scripted line has to carry the conversation; a throw must not escape.
     created.mockRejectedValue(new Error('502 from provider'));

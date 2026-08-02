@@ -43,6 +43,18 @@ export interface LlmModelOption {
    * that reject `none` name their supported values in the 400; verified live.
    */
   reasoningEffort?: 'none' | 'low' | 'medium' | 'high';
+  /**
+   * Serves an uploaded LoRA adapter on top of `model` instead of the base
+   * weights, by sending its name as `metadata.lora`.
+   *
+   * The name is not baked in — it comes from VITE_SAIL_LORA, so retraining and
+   * re-registering an adapter (see training/pokerbench) needs no code change.
+   * Two consequences, both verified against the live API: Sail rejects
+   * `completion_window: asap` for LoRA requests, so `windows` must exclude it;
+   * and a request naming an unknown adapter is a hard 404 rather than a quiet
+   * fall back to the base model.
+   */
+  usesLora?: boolean;
   /** Rough note shown as the option's title attribute. */
   note?: string;
 }
@@ -96,6 +108,24 @@ export const LLM_MODEL_OPTIONS: LlmModelOption[] = [
     windows: ['asap', 'priority', 'standard', 'flex'],
     reasoningEffort: 'none',
     note: 'Reasoning disabled for speed (~1.4s). Leaving it on costs 26-49s per line.',
+  },
+  {
+    id: 'sail-kimi-k2.6-lora',
+    label: 'Sail · Kimi K2.6 + PokerBench LoRA',
+    provider: 'sail',
+    // The adapter rides on the base model: `model` still names Kimi K2.6, and
+    // `metadata.lora` selects the adapter. Kimi is the only base model Sail
+    // serves LoRAs for (max rank 32).
+    model: 'moonshotai/Kimi-K2.6',
+    reasoning: true,
+    // `asap` is deliberately absent: Sail answers a LoRA request on that tier
+    // with 400 "lora requests cannot use completion_window=asap". resolveWindow
+    // therefore picks `priority`, the quickest tier that is actually accepted.
+    windows: ['priority', 'standard', 'flex'],
+    reasoningEffort: 'none',
+    usesLora: true,
+    note: 'Post-trained on PokerBench (see training/pokerbench). Needs VITE_SAIL_LORA. '
+      + '~8.5s per line: LoRA requests cannot use the fast `asap` tier.',
   },
   {
     id: 'sail-glm-5.2',
@@ -187,6 +217,36 @@ export function getSailApiKey(): string {
   return readKey('VITE_SAIL_API_KEY');
 }
 
+/**
+ * Name of the uploaded Sail LoRA to serve, from VITE_SAIL_LORA.
+ *
+ * Unlike the keys this is readable in tests: it is a name, not a credential,
+ * and nothing about reading it touches the network.
+ */
+export function getSailLoraName(): string {
+  return (import.meta.env.VITE_SAIL_LORA as string | undefined)?.trim() ?? '';
+}
+
+/**
+ * The `metadata` block for a Sail request, or undefined for OpenAI.
+ *
+ * Sail carries both the service tier and the LoRA selection here. They are
+ * built together because they constrain each other — an `asap` tier alongside
+ * `lora` is a 400 — and `windows` on the LoRA option is what keeps
+ * `resolveWindow` from producing that combination.
+ */
+export function sailMetadata(
+  model: LlmModelOption,
+  preferredWindow: CompletionWindow,
+): Record<string, string> | undefined {
+  if (model.provider !== 'sail') return undefined;
+  const metadata: Record<string, string> = {
+    completion_window: resolveWindow(model, preferredWindow),
+  };
+  if (model.usesLora) metadata.lora = getSailLoraName();
+  return metadata;
+}
+
 export function apiKeyFor(model: LlmModelOption): string {
   return model.provider === 'sail' ? getSailApiKey() : getOpenAiApiKey();
 }
@@ -212,9 +272,22 @@ export function resolveWindow(
   return bySpeed.find((w) => allowed.includes(w)) ?? allowed[0];
 }
 
-/** True when the selected backend has a key configured. */
+/** True when the selected backend has everything it needs configured. */
 export function isModelUsable(model: LlmModelOption): boolean {
-  return apiKeyFor(model) !== '';
+  if (apiKeyFor(model) === '') return false;
+  // A LoRA option with no adapter name would be served by the base model — the
+  // request succeeds and sounds fine, so nothing would ever reveal that the
+  // fine-tune is not actually in play. Treat it as unconfigured instead.
+  return !model.usesLora || getSailLoraName() !== '';
+}
+
+/** What the player has to set to make this option work. */
+export function missingConfigFor(model: LlmModelOption): string {
+  if (apiKeyFor(model) === '') {
+    return model.provider === 'sail' ? 'VITE_SAIL_API_KEY' : 'VITE_OPENAI_API_KEY';
+  }
+  if (model.usesLora && getSailLoraName() === '') return 'VITE_SAIL_LORA';
+  return '';
 }
 
 /**

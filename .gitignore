@@ -28,3 +28,8 @@ dist/
 .pdfenv/
 GAME_GOAL.txt
 node_modules/
+
+# Python (training/)
+__pycache__/
+*.py[cod]
+.venv/

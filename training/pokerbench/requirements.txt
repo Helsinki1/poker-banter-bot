@@ -1,0 +1,17 @@
+# Python 3.11+ (tinker requires it; the system default here is 3.10).
+#
+#   python3.11 -m venv .venv && source .venv/bin/activate
+#   pip install -r requirements.txt
+
+tinker>=0.24.0
+tinker-cookbook
+sail>=0.5.6
+
+datasets>=2.19.0        # RZ412/PokerBench
+openai>=1.40.0          # Sail speaks the OpenAI wire format
+requests>=2.31.0        # /v1/loras has no SDK method
+
+# Pulled in by tinker-cookbook's weights module, listed because
+# export_and_upload.py uses them directly.
+safetensors>=0.4.0
+numpy>=1.24.0
