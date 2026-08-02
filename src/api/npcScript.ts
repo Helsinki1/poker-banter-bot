@@ -8,7 +8,7 @@ import type { PublicGameSnapshot, VoiceProfile } from './conversationClient';
 export const VOICE_PROFILES: Record<OpponentId, VoiceProfile> = {
   einstein: { pitch: 1.25, rate: 0.92, voiceHint: ['Daniel', 'Fred', 'Google UK English Male'] },
   lebron: { pitch: 0.75, rate: 1.0, voiceHint: ['Aaron', 'Alex', 'Google US English'] },
-  negreanu: { pitch: 1.05, rate: 1.12, voiceHint: ['Samantha', 'Tom', 'Google US English'] },
+  trump: { pitch: 0.88, rate: 0.98, voiceHint: ['Aaron', 'Alex', 'Google US English'] },
 };
 
 export interface HandSummary {
@@ -27,6 +27,8 @@ export interface ConversationMemory {
   handSummaries: HandSummary[];
   playerAggressiveActions: number;
   playerPassiveActions: number;
+  /** Times the player has folded — prime tilt material. */
+  playerFolds: number;
   biggestPotSeen: number;
   playerTauntCount: number;
 }
@@ -40,6 +42,7 @@ export function emptyMemory(): ConversationMemory {
     handSummaries: [],
     playerAggressiveActions: 0,
     playerPassiveActions: 0,
+    playerFolds: 0,
     biggestPotSeen: 0,
     playerTauntCount: 0,
   };
@@ -204,55 +207,58 @@ const SCRIPTS: Record<OpponentId, CharacterScript> = {
     generic: ['I hear you. Stay focused though — this pot matters.', 'Talk’s good. Execution’s better.', 'Keep talking, I’m locked in either way.'],
     fallback: ['Say that again? Crowd noise in my head.'],
   },
-  negreanu: {
+  trump: {
     greeting: [
-      "Heyyy, there we go — a live one! Sit down, let's chat and play some cards.",
-      'Welcome, welcome. Fair warning: I talk. A lot. Part of the game.',
+      'Welcome, welcome. You’re playing against the best dealmaker this table has ever seen. Everybody says so.',
+      'Sit down, sit down. This is going to be a tremendous game — for me.',
     ],
     streetComment: (street, snap) => [
-      `Ooh, that ${street} is spicy. Did your eyes just light up a little?`,
-      `Interesting texture out there. ${snap.pot} in the pot and a story forming.`,
-      'That card helps somebody, and I’m going to figure out who.',
+      `Beautiful ${street}. Maybe the most beautiful ${street} ever dealt. Great for me, not for you.`,
+      `${snap.pot} in the pot. Huge pot. And frankly, it’s already mine.`,
+      'That card? I called it. I always call it. Ask anybody.',
     ],
     playerAggro: [
-      'Whoa, big bet! That’s either a monster or a movie. Which one are you making?',
-      'Sizing tells a story, my friend, and yours just got interesting.',
-      'You came out swinging. I’ve seen that pattern before… twice tonight, actually.',
+      'Big bet, very bold. Bold and, frankly, a disaster. You’ll see.',
+      'You’re raising ME? People have tried that. It never ends well for them, believe me.',
+      'That’s a desperate bet. Sad! I’ve seen stronger moves from a losing hand.',
     ],
     playerPassive: [
-      'Just a call? Hmm. Trappy or scared — I’ll figure out which.',
-      'Small ball, I see. I invented small ball, you know. In this fictional universe, anyway.',
+      'Just a call. Low energy. Very low energy play.',
+      'A check? Weak. Everybody at this table knows it’s weak.',
     ],
-    playerFolded: ['Good fold? Bad fold? Only I know, and I’m not telling… okay, I might tell later.', 'You let that one go — probably wise. Probably.'],
+    playerFolded: [
+      'Another fold. You fold more than anybody — people are talking about it.',
+      'Smart fold. First smart thing you’ve done, frankly.',
+    ],
     win: [
-      'Yes! Read it like a paperback. That’s the stuff!',
-      'Scoop! Don’t worry, I’ll give you a rematch — I’m generous like that.',
+      'I win again. Nobody wins like me. Nobody.',
+      'That pot? Mine. Like everything else at this table. Tremendous.',
     ],
-    loss: ['Wowww, okay, okay. Nice hand. I set the trap and fell in it myself.', 'You got me. I hate it and I love it.'],
-    split: ['Chop it up! Nobody’s hurt, nobody’s happy. Classic.'],
-    yourTurn: ['You’re up! And I’m watching everything — the pause, the mouse, all of it.', 'Your action, friend. Take your time; the tells are free.'],
+    loss: ['The deck is rigged, everybody knows it. We’re looking into it — strongly.', 'You got lucky. Luckiest hand in history, probably. Won’t happen twice.'],
+    split: ['A tie? I don’t do ties. We’re counting that as a win. My people agree.'],
+    yourTurn: ['Your move. Take your time — the longer you think, the worse it gets for you.', 'You’re up. Everybody’s watching. No pressure. Tremendous pressure, actually.'],
     bluffAccusation: [
-      'Me? Bluff? I’m offended. Genuinely. Deeply. …Okay, maybe a little.',
-      'You call it a bluff, I call it a narrative. Pay to read the ending.',
+      'Bluff? I’ve never bluffed in my life. Most honest player in the game — many people say it.',
+      'You calling ME a bluffer? That’s fake news, one hundred percent.',
     ],
-    compliment: ['See, this is why I love this game — good vibes and violence, together.', 'Aw, thanks. Now I almost feel bad about your chips. Almost.'],
-    luckTalk: ['Run good, play good — hard to tell apart from the rail, eh?', 'Luck evens out. Reads don’t.'],
+    compliment: ['Of course it was a great play. I only make great plays.', 'Correct. And it was even better than you think.'],
+    luckTalk: ['Luck? I make my own luck. Best luck-maker there is.', 'When I win it’s skill, when you win it’s luck. That’s just math.'],
     whatDoIHave: [
-      'What do I have? Great question. Wrong person to ask, though.',
-      'I’ll tell you exactly what I have… at showdown. Poker rules, not mine.',
+      'The best hand. The strongest hand this dealer has ever dealt. That’s all I’ll say.',
+      'My cards are incredible. You’ll find out — the expensive way.',
     ],
     actionWords: [
-      'Ha! Nice try — talking it doesn’t play it. Buttons only at this table.',
-      'You can say fold all night, friend. The game only listens to clicks.',
+      'Say it all you want — the buttons do the playing. Buttons only, that’s the deal.',
+      'Talking a fold doesn’t make a fold. Believe me, I know deals — click it.',
     ],
-    potQuestion: (snap) => [`Pot’s ${snap.pot}. Big enough to be fun, small enough to grow.`],
-    turnQuestion: (snap) => [snap.activePlayer === 'player' ? 'You, my friend. All eyes on you.' : 'Me. And I’m milking the moment.'],
+    potQuestion: (snap) => [`${snap.pot} in the pot. Huge. And it’s got my name on it — beautiful name.`],
+    turnQuestion: (snap) => [snap.activePlayer === 'player' ? 'You. And frankly, everybody’s losing patience.' : 'Mine. The important moves are always mine.'],
     lastHand: (m) => {
       const last = m.handSummaries[m.handSummaries.length - 1];
-      return last ? [`Last hand? ${last.headline}. I remember everything, by the way.`] : ['No hands yet — clean slate, fresh reads.'];
+      return last ? [`Last hand: ${last.headline}. I remember it better than anyone. Photographic memory — the doctors were amazed.`] : ['No hands yet. Historic opportunity for you to lose the first one.'];
     },
-    generic: ['Ha! Good table talk. You’re learning.', 'I hear you. My read on you is updating in real time, just so you know.', 'Keep talking — every word’s a tell.'],
-    fallback: ['Wait, hold on, I got distracted counting your chips. What was that?'],
+    generic: ['That’s nice. Anyway, back to me winning.', 'Interesting. Wrong, but interesting.', 'Great talk. Terrible strategy, great talk.'],
+    fallback: ['Nobody’s ever said that to me before. Anyway — I’m still winning.'],
   },
 };
 

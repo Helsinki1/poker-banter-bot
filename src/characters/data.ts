@@ -36,15 +36,15 @@ export const CHARACTERS: CharacterInfo[] = [
     accent: '#c9a55a',
   },
   {
-    id: 'negreanu',
-    name: 'The Kid Reader',
-    tagline: 'Talks the whole time. Reads you the whole time.',
-    pokerStyle: 'Reactive & probing — small bets, adapts to your patterns.',
+    id: 'trump',
+    name: 'The Dealmaker',
+    tagline: 'Every pot is a deal — and he never loses a deal. Just ask him.',
+    pokerStyle: 'Bold & bombastic — huge bets, huge bluffs, never backs down.',
     difficulty: 3,
-    difficultyLabel: 'Perceptive',
-    motif: 'darting eyes',
-    introLine: "Heyyy, a live one! Let's chat — and play, I guess.",
-    accent: '#b3707a',
+    difficultyLabel: 'Relentless bravado',
+    motif: 'gold trim',
+    introLine: 'Sit down. This is going to be a tremendous game — for me.',
+    accent: '#c9963c',
   },
 ];
 

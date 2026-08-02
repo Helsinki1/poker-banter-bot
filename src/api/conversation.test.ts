@@ -208,7 +208,7 @@ describe('MockRealtimeConversationClient', () => {
 describe('public snapshot stripping', () => {
   it('never exposes player hole cards or the deck to the conversation layer', async () => {
     const poker = new MockPokerGameClient({ seed: 5, latencyMs: 0 });
-    await poker.startMatch('negreanu');
+    await poker.startMatch('trump');
     let snap = await poker.startHand();
     for (let i = 0; i < 5 && snap.activePlayer === null; i++) snap = await poker.advancePhase();
     expect(snap.playerCards.length).toBe(2);

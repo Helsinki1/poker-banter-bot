@@ -7,10 +7,10 @@ const base = process.argv[2] ?? 'http://localhost:5173';
 const only = process.argv.slice(3);
 
 const SCENES = [
-  'picker', 'picker-einstein', 'picker-lebron', 'picker-negreanu',
-  'table-einstein', 'table-lebron', 'table-negreanu',
+  'picker', 'picker-einstein', 'picker-lebron', 'picker-trump',
+  'table-einstein', 'table-lebron', 'table-trump',
   'shuffling', 'holecards', 'opponent-decision', 'player-decision',
-  'flop', 'flop-lebron', 'flop-negreanu', 'turn', 'river',
+  'flop', 'flop-lebron', 'flop-trump', 'turn', 'river',
   'showdown', 'player-win', 'player-loss', 'split-pot', 'fold-resolution',
   'voice-disabled', 'voice-connecting', 'voice-connected', 'mic-active',
   'player-speaking', 'transcript-streaming', 'npc-listening', 'npc-thinking',

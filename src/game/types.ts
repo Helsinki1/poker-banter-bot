@@ -9,7 +9,7 @@ export interface Card {
   suit: Suit;
 }
 
-export type OpponentId = 'einstein' | 'lebron' | 'negreanu';
+export type OpponentId = 'einstein' | 'lebron' | 'trump';
 
 export type Seat = 'player' | 'opponent';
 
@@ -78,6 +78,10 @@ export interface HandResult {
   /** Human-readable, e.g. "Two Pair, Kings and Fours" */
   playerHandName?: string;
   opponentHandName?: string;
+  /** The exact five cards each showdown hand was scored on — lets the UI
+      prove the result by highlighting them on the table. */
+  playerBestFive?: Card[];
+  opponentBestFive?: Card[];
   reason: 'showdown' | 'fold';
   potWon: number;
 }
