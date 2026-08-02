@@ -1,0 +1,36 @@
+{
+  "_comment": [
+    "What export_and_upload.py produces for Kimi K2.6 at rank 32 — recorded here",
+    "so you can eyeball a real conversion against it. You do not write this file;",
+    "build_lora_adapter does, and target_modules comes from whatever modules Tinker",
+    "actually trained (train_attn/train_mlp on the training client).",
+    "Sail requires: peft_type LORA, task_type CAUSAL_LM, r <= 32, and",
+    "base_model_name_or_path naming the model registered in supported_models.",
+    "Sail does not restrict Kimi K2.6 to a target-module allowlist, so a narrow",
+    "list like [q_proj, v_proj] is not required — and would drop trained modules."
+  ],
+  "peft_type": "LORA",
+  "task_type": "CAUSAL_LM",
+  "base_model_name_or_path": "moonshotai/Kimi-K2.6",
+  "r": 32,
+  "lora_alpha": 32,
+  "lora_dropout": 0.0,
+  "bias": "none",
+  "fan_in_fan_out": false,
+  "inference_mode": true,
+  "init_lora_weights": true,
+  "modules_to_save": null,
+  "auto_mapping": null,
+  "rank_pattern": {},
+  "alpha_pattern": {},
+  "target_modules": [
+    "down_proj",
+    "gate_proj",
+    "kv_a_proj_with_mqa",
+    "kv_b_proj",
+    "o_proj",
+    "q_a_proj",
+    "q_b_proj",
+    "up_proj"
+  ]
+}

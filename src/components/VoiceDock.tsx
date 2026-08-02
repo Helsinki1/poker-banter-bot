@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { ConversationController, MicMode } from '../state/useConversation';
 import { NPC_VOICE_OPTIONS, type NpcVoice } from '../voice/cartesiaTts';
-import { LLM_MODEL_OPTIONS, isModelUsable } from '../api/llmProviders';
+import { LLM_MODEL_OPTIONS, isModelUsable, missingConfigFor } from '../api/llmProviders';
 import type { VoiceDemo } from '../scenes';
 import {
   ConnectionIcon, KeyboardIcon, MicIcon, MicMutedIcon, SpeakerIcon,
@@ -150,14 +150,17 @@ export default function VoiceDock({ convo, demo }: Props) {
         >
           {LLM_MODEL_OPTIONS.map((m) => {
             const usable = isModelUsable(m);
+            // A LoRA option can be unusable with a perfectly good key — it also
+            // needs an adapter name — so the hint names whatever is missing.
+            const missing = usable ? '' : missingConfigFor(m);
             return (
               <option
                 key={m.id}
                 value={m.id}
                 disabled={!usable}
-                title={usable ? m.note : `Set ${m.provider === 'sail' ? 'VITE_SAIL_API_KEY' : 'VITE_OPENAI_API_KEY'} to use this`}
+                title={usable ? m.note : `Set ${missing} to use this`}
               >
-                {m.label}{usable ? '' : ' (no key)'}
+                {m.label}{usable ? '' : ` (set ${missing})`}
               </option>
             );
           })}

@@ -10,7 +10,7 @@ import {
   baseUrlFor,
   findModel,
   loadSelectedModelId,
-  resolveWindow,
+  sailMetadata,
 } from './llmProviders';
 
 // LLM-generated table talk. Produces ONE short in-character line per trigger.
@@ -244,10 +244,12 @@ export async function* streamBanterLine(
         model.reasoning && model.reasoningEffort !== 'none' ? REASONING_MAX_TOKENS : MAX_TOKENS,
       stream: true,
       messages: buildMessages(characterName, voice, trigger, memory, snapshot),
-      // Sail routes by service tier; `asap` is the only conversational one.
-      ...(model.provider === 'sail'
-        ? { metadata: { completion_window: resolveWindow(model, SAIL_WINDOW) } }
-        : {}),
+      // Sail routes by service tier (`asap` is the only conversational one) and
+      // selects a post-trained adapter, both through `metadata`.
+      ...(() => {
+        const metadata = sailMetadata(model, SAIL_WINDOW);
+        return metadata ? { metadata } : {};
+      })(),
       // Reasoning is the whole latency story on Sail. Left on, Kimi spends the
       // entire token budget deliberating (often emitting NO spoken line at all,
       // 26-49s); off, the same line arrives in ~1.4s.

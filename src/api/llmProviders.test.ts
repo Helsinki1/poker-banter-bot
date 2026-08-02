@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_MODEL_ID,
   LLM_MODEL_OPTIONS,
@@ -6,7 +6,10 @@ import {
   OPENAI_BASE_URL,
   baseUrlFor,
   findModel,
+  isModelUsable,
+  missingConfigFor,
   resolveWindow,
+  sailMetadata,
 } from './llmProviders';
 
 describe('llm provider registry', () => {
@@ -70,5 +73,72 @@ describe('llm provider registry', () => {
     for (const m of LLM_MODEL_OPTIONS.filter((m) => m.provider === 'sail')) {
       expect(m.model).toMatch(/^[\w.-]+\/[\w.-]+$/);
     }
+  });
+});
+
+describe('post-trained LoRA backend', () => {
+  const LORA_ID = 'sail-kimi-k2.6-lora';
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('never asks for asap on a LoRA request', () => {
+    // Verified against the live API: Sail answers `asap` + `lora` with
+    // 400 "lora requests cannot use completion_window=asap". Since asap is the
+    // preferred tier everywhere else, the option itself has to exclude it.
+    const lora = findModel(LORA_ID);
+    expect(lora.windows).not.toContain('asap');
+    expect(resolveWindow(lora, 'asap')).toBe('priority');
+  });
+
+  it('sends the configured adapter name as metadata.lora', () => {
+    vi.stubEnv('VITE_SAIL_LORA', 'pokerbench-sft-v1');
+    expect(sailMetadata(findModel(LORA_ID), 'asap')).toEqual({
+      completion_window: 'priority',
+      lora: 'pokerbench-sft-v1',
+    });
+  });
+
+  it('rides on the base model id, since the adapter is selected by metadata', () => {
+    // Kimi K2.6 is the only base model Sail serves LoRAs for. The request still
+    // names the base model; `metadata.lora` is what swaps in the adapter.
+    expect(findModel(LORA_ID).model).toBe(findModel('sail-kimi-k2.6').model);
+  });
+
+  it('does not attach lora metadata to the plain Sail models', () => {
+    vi.stubEnv('VITE_SAIL_LORA', 'pokerbench-sft-v1');
+    // Otherwise picking base Kimi would silently serve the fine-tune.
+    expect(sailMetadata(findModel('sail-kimi-k2.6'), 'asap')).toEqual({
+      completion_window: 'asap',
+    });
+  });
+
+  it('sends no metadata at all to OpenAI', () => {
+    expect(sailMetadata(findModel('gpt-4.1-mini'), 'asap')).toBeUndefined();
+  });
+
+  it('keeps reasoning off, so the tuned model answers instead of deliberating', () => {
+    expect(findModel(LORA_ID).reasoningEffort).toBe('none');
+  });
+
+  it('treats a missing adapter name as unconfigured, not as a working option', () => {
+    // With a key but no VITE_SAIL_LORA, Sail would serve the BASE model: the
+    // request succeeds and the banter sounds fine, so nothing would reveal that
+    // the fine-tune is not in play. Better to disable the option outright.
+    vi.stubEnv('VITE_SAIL_LORA', '');
+    vi.stubEnv('VITE_SAIL_API_KEY', 'sk-test');
+    vi.stubEnv('MODE', 'development'); // readKey returns '' under MODE=test
+    expect(isModelUsable(findModel(LORA_ID))).toBe(false);
+    expect(missingConfigFor(findModel(LORA_ID))).toBe('VITE_SAIL_LORA');
+    // The base Kimi option is unaffected — it needs no adapter.
+    expect(isModelUsable(findModel('sail-kimi-k2.6'))).toBe(true);
+  });
+
+  it('reports the key, not the adapter, when the key is what is missing', () => {
+    vi.stubEnv('VITE_SAIL_LORA', 'pokerbench-sft-v1');
+    vi.stubEnv('VITE_SAIL_API_KEY', '');
+    vi.stubEnv('MODE', 'development');
+    expect(missingConfigFor(findModel(LORA_ID))).toBe('VITE_SAIL_API_KEY');
   });
 });
