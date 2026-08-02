@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { OpponentId } from './game/types';
 import { useMatch } from './state/useMatch';
 import { useConversation } from './state/useConversation';
+import { setActivePokerPersona } from './game/personas';
 import CharacterPicker from './components/CharacterPicker';
 import PokerRoom from './components/PokerRoom';
 import { activeScene } from './scenes';
@@ -26,6 +27,12 @@ export default function App() {
   const opponentId = view.kind === 'room' || view.kind === 'entering' ? view.opponentId : null;
   const match = useMatch(view.kind === 'room' ? opponentId : null, scene?.config.scenario);
   const convo = useConversation(view.kind === 'room' ? opponentId : null, match.snapshot);
+
+  // The chosen voice also selects the opponent's poker persona (one-way:
+  // the conversation layer itself never touches the poker engine).
+  useEffect(() => {
+    setActivePokerPersona(convo.npcVoice);
+  }, [convo.npcVoice]);
 
   // Cinematic transition: fade the picker away, then reveal the room.
   const handleStart = useCallback((id: OpponentId) => {

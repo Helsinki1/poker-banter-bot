@@ -4,28 +4,15 @@ import type { LegalAction, OpponentId, PokerAction } from './types';
 import { BIG_BLIND } from './types';
 import { createRng } from './deck';
 import { evaluateHand, HAND_CATEGORY } from './evaluator';
+import { getActivePokerPersona, type PokerPersona } from './personas';
 
-// Lightweight, character-flavored opponent decisions.
-// Deterministic for a given engine state (seeded from rngState + action count)
-// so demo scenes and tests are reproducible. Deliberately replaceable by a
-// backend decision service later — same inputs, same PokerAction output.
-
-interface Personality {
-  /** 0..1 — how often to prefer aggressive lines with medium hands. */
-  aggression: number;
-  /** 0..1 — how often to bluff with weak hands. */
-  bluff: number;
-  /** Typical bet sizing as a fraction of pot. */
-  sizing: number;
-  /** 0..1 — willingness to call with marginal hands. */
-  sticky: number;
-}
-
-const PERSONALITIES: Record<OpponentId, Personality> = {
-  einstein: { aggression: 0.42, bluff: 0.14, sizing: 0.55, sticky: 0.5 },
-  lebron: { aggression: 0.68, bluff: 0.22, sizing: 0.85, sticky: 0.45 },
-  negreanu: { aggression: 0.5, bluff: 0.3, sizing: 0.4, sticky: 0.65 },
-};
+// Persona-flavored stochastic opponent decisions. Every legal action gets an
+// equity-aware weight, the active persona skews those weights (aggression,
+// bluffing, shove appetite, hero-calls, noise), and one action is sampled
+// from the distribution. Deterministic for a given engine state (seeded from
+// rngState + action count) so demo scenes and tests are reproducible.
+// Deliberately replaceable by a backend decision service later — same
+// inputs, same PokerAction output.
 
 /** Rough 0..1 strength of the opponent's hand at the current street. */
 export function handStrength(s: EngineState): number {
@@ -66,13 +53,41 @@ function clampAmount(l: LegalAction, desired: number): number {
   return Math.max(l.min ?? desired, Math.min(l.max ?? desired, Math.round(desired)));
 }
 
+function clamp01(v: number): number {
+  return Math.max(0, Math.min(1, v));
+}
+
+/** Sample one key from a weight map (weights need not be normalized). */
+function sample<T extends string>(weights: Record<T, number>, roll: number): T {
+  const entries = Object.entries(weights) as [T, number][];
+  const total = entries.reduce((acc, [, w]) => acc + Math.max(0, w), 0);
+  if (total <= 0) return entries[0][0];
+  let cursor = roll * total;
+  for (const [key, w] of entries) {
+    cursor -= Math.max(0, w);
+    if (cursor <= 0) return key;
+  }
+  return entries[entries.length - 1][0];
+}
+
+/** In-hand read of the player used by adaptive personas (Ivey-style). */
+function playerRead(s: EngineState): { raises: number; passives: number } {
+  let raises = 0;
+  let passives = 0;
+  for (const a of s.actionLog) {
+    if (a.seat !== 'player') continue;
+    if (a.type === 'bet' || a.type === 'raise' || a.type === 'all-in') raises++;
+    else if (a.type === 'check' || a.type === 'call') passives++;
+  }
+  return { raises, passives };
+}
+
 export function decideOpponentAction(s: EngineState): PokerAction {
   const legal = legalActionsFor(s, 'opponent');
   if (legal.length === 0) throw new Error('AI asked to act out of turn');
-  const p = PERSONALITIES[s.opponentId];
+  const p: PokerPersona = getActivePokerPersona();
   const rng = createRng((s.rngState ^ (s.actionLog.length * 7919) ^ s.handNumber * 104729) >>> 0);
-  const roll = rng();
-  const strength = handStrength(s);
+
   const pot = s.pot + s.playerCommitted + s.opponentCommitted;
   const toCall = Math.max(0, s.playerCommitted - s.opponentCommitted);
 
@@ -82,45 +97,112 @@ export function decideOpponentAction(s: EngineState): PokerAction {
   const bet = find('bet');
   const raiseA = find('raise');
   const fold = find('fold');
+  const allIn = find('all-in');
 
-  // Negreanu adapts: if the player has been raising a lot this hand, tighten up slightly.
-  let adjStrength = strength;
-  if (s.opponentId === 'negreanu') {
-    const playerAggro = s.actionLog.filter((a) => a.seat === 'player' && (a.type === 'raise' || a.type === 'bet')).length;
-    adjStrength = Math.min(1, strength + (playerAggro >= 2 ? -0.06 : 0.04));
+  // Perceived strength = real equity + persona noise (chaotic personas
+  // misjudge more), nudged by adaptive reads on the player.
+  const strength = handStrength(s);
+  let perceived = clamp01(strength + (rng() - 0.5) * p.chaos * 0.5);
+  let bluffMod = 1;
+  let aggroMod = 1;
+  if (p.adapt) {
+    const read = playerRead(s);
+    if (read.raises >= 2) {
+      // Player is fighting back — respect it: fewer bluffs, tighter value.
+      perceived = clamp01(perceived - 0.05);
+      bluffMod = 0.55;
+    } else if (read.passives >= 2 && read.raises === 0) {
+      // Player is passive — ramp up the pressure mercilessly.
+      aggroMod = 1.35;
+      bluffMod = 1.4;
+    }
   }
-  // LeBron keeps pressure after aggression: more likely to fire again.
-  const aggroBoost = s.opponentId === 'lebron' &&
-    s.actionLog.some((a) => a.seat === 'opponent' && (a.type === 'raise' || a.type === 'bet')) ? 0.12 : 0;
+  const aggression = clamp01(p.aggression * aggroMod);
+  const bluff = clamp01(p.bluff * bluffMod);
 
-  const wantAggro = adjStrength > 0.62 ||
-    (adjStrength > 0.42 && roll < p.aggression + aggroBoost) ||
-    (adjStrength <= 0.42 && roll < p.bluff);
+  // Shove appetite scales with how large the shove is relative to the pot:
+  // short-stack jams are near-standard, huge overbet jams stay special.
+  const shoveTo = allIn?.min ?? 0;
+  const shoveOverPot = shoveTo / Math.max(pot, BIG_BLIND * 2);
+  const shoveScale = shoveOverPot <= 3 ? 1.4 : shoveOverPot <= 6 ? 0.9 : 0.5;
+
+  const sizeMul = () => 1 - p.sizingJitter / 2 + rng() * p.sizingJitter;
 
   if (toCall === 0) {
     const opener = bet ?? raiseA;
-    if (wantAggro && opener) {
-      const sizeJitter = 0.75 + rng() * 0.5;
-      const desired = Math.max(BIG_BLIND, pot * p.sizing * sizeJitter) + (opener.type === 'raise' ? toCall : 0);
+    let wCheck = 0.9 - perceived * 0.4;
+    let wOpen = 0;
+    let wShove = 0;
+    if (opener) {
+      if (perceived > 0.62) wOpen = 1.4 + aggression;
+      else if (perceived > 0.42) wOpen = aggression * 1.1;
+      else wOpen = bluff * 0.9;
+    }
+    if (allIn) {
+      if (perceived >= p.shoveStrength) wShove = p.shove * 2.2 * shoveScale;
+      else if (perceived > 0.5) wShove = p.shove * 0.55 * shoveScale;
+      else wShove = p.shove * bluff * 0.45 * shoveScale; // fearless bluff-jam
+    }
+    if (perceived > 0.72) wCheck *= 0.3; // monsters rarely slow-play forever
+
+    const pick = sample({ check: wCheck, open: wOpen, shove: wShove }, rng());
+    if (pick === 'shove' && allIn) {
+      return { type: 'all-in', amount: allIn.min, seat: 'opponent' };
+    }
+    if (pick === 'open' && opener) {
+      const desired = Math.max(BIG_BLIND, pot * p.sizing * sizeMul());
       const target = opener.type === 'raise' ? s.playerCommitted + desired : desired;
       return { type: opener.type, amount: clampAmount(opener, target), seat: 'opponent' };
     }
     if (check) return { type: 'check', seat: 'opponent' };
   }
 
-  // Facing a bet.
+  // Facing chips. Compare perceived equity against the price.
   const potOdds = toCall / Math.max(1, pot + toCall);
-  const callable = adjStrength + (p.sticky - 0.5) * 0.25 > potOdds + 0.12;
+  const edge = perceived - potOdds;
+  // A shove leaves no raise behind (or calling puts a stack at risk).
+  const facingShove = s.previousAction?.type === 'all-in' || (!raiseA && !allIn);
 
-  if (wantAggro && raiseA && adjStrength > 0.55) {
-    const desired = s.playerCommitted + Math.max(s.lastRaiseSize, pot * p.sizing);
+  let wFold = fold ? Math.max(0.08, -edge * 3.2) * (1.35 - p.sticky) : 0;
+  let wCall = 0;
+  if (call) {
+    wCall = edge > 0
+      ? 1 + edge * 3 + p.sticky * 0.5
+      : Math.max(0.12, p.sticky * (1 + edge * 2));
+  }
+  let wRaise = 0;
+  let wShove = 0;
+  if (raiseA) {
+    if (perceived > 0.68) wRaise = 1.1 + aggression;
+    else if (perceived > 0.5) wRaise = aggression * 0.6;
+    else wRaise = bluff * 0.35; // check-raise / re-bluff line
+  }
+  if (allIn) {
+    if (perceived >= p.shoveStrength) wShove = p.shove * 2 * shoveScale;
+    else if (perceived > 0.55) wShove = p.shove * 0.6 * shoveScale;
+    else wShove = p.shove * bluff * 0.3 * shoveScale;
+  }
+
+  if (facingShove && call) {
+    // Personas do NOT roll over to all-ins: hero-call floor keeps a real
+    // calling range, scaled down only when the hand is truly hopeless.
+    const floor = p.heroCall * (perceived > 0.3 ? 1.15 : 0.3);
+    wCall = Math.max(wCall, floor);
+    wFold *= 1 - p.heroCall * 0.55;
+  }
+
+  const pick = sample({ fold: wFold, call: wCall, raise: wRaise, shove: wShove }, rng());
+  if (pick === 'shove' && allIn) {
+    return { type: 'all-in', amount: allIn.min, seat: 'opponent' };
+  }
+  if (pick === 'raise' && raiseA) {
+    const desired = s.playerCommitted + Math.max(s.lastRaiseSize, pot * p.sizing * sizeMul());
     return { type: 'raise', amount: clampAmount(raiseA, desired), seat: 'opponent' };
   }
-  if (call && (callable || roll < p.sticky * 0.4)) {
-    return { type: 'call', seat: 'opponent' };
-  }
+  if (pick === 'call' && call) return { type: 'call', seat: 'opponent' };
+  if (pick === 'fold' && fold) return { type: 'fold', seat: 'opponent' };
+  if (call) return { type: 'call', seat: 'opponent' };
   if (check) return { type: 'check', seat: 'opponent' };
-  if (fold) return { type: 'fold', seat: 'opponent' };
   // Fallback: some legal action always exists.
   const first = legal[0];
   return { type: first.type, amount: first.min, seat: 'opponent' };
@@ -131,6 +213,6 @@ export function thinkTimeMs(opponentId: OpponentId, rand: number): number {
   switch (opponentId) {
     case 'einstein': return 900 + rand * 1400; // deliberate
     case 'lebron': return 450 + rand * 650; // decisive
-    case 'negreanu': return 600 + rand * 900;
+    case 'trump': return 500 + rand * 700; // decisive, impatient
   }
 }
