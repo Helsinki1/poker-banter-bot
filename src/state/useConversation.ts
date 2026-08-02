@@ -6,6 +6,8 @@ import { MockRealtimeConversationClient } from '../api/mockConversationClient';
 import { DictationAdapter, isDictationSupported, type DictationStatus } from '../voice/dictation';
 import { CartesiaSttAdapter, isCartesiaSttAvailable } from '../voice/cartesiaStt';
 import { CartesiaVoicePlayer, type NpcVoice } from '../voice/cartesiaTts';
+import { setBanterModel } from '../api/llmBanter';
+import { loadSelectedModelId, saveSelectedModelId } from '../api/llmProviders';
 
 /** Each table character speaks with a default voice; the dropdown can override. */
 const CHARACTER_DEFAULT_VOICE: Record<OpponentId, NpcVoice> = {
@@ -41,6 +43,9 @@ export interface ConversationController {
   ttsSpeaking: boolean;
   npcVoice: NpcVoice;
   setNpcVoice: (voice: NpcVoice) => void;
+  /** Which LLM backend generates table talk (OpenAI or a Sail model). */
+  banterModelId: string;
+  setBanterModelId: (id: string) => void;
   enableVoice: () => void;
   disableVoice: () => void;
   setMicMode: (mode: MicMode) => void;
@@ -86,6 +91,14 @@ export function useConversation(
       if (saved === 'normal' || saved === 'lebron' || saved === 'trump') return saved;
     } catch { /* private mode */ }
     return 'normal';
+  });
+  const [banterModelId, setBanterModelIdState] = useState<string>(() => {
+    // Push the persisted choice into the banter module too: it keeps its own
+    // module-level selection, which would otherwise sit at the default until
+    // the dropdown was touched.
+    const id = loadSelectedModelId();
+    setBanterModel(id);
+    return id;
   });
   const interimClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -323,6 +336,12 @@ export function useConversation(
     try { localStorage.setItem('npc-voice', voice); } catch { /* private mode */ }
   }, []);
 
+  const setBanterModelId = useCallback((id: string) => {
+    setBanterModelIdState(id);
+    setBanterModel(id);
+    saveSelectedModelId(id);
+  }, []);
+
   const simulateDrop = useCallback(() => clientRef.current?.simulateConnectionDrop(), []);
 
   return {
@@ -341,6 +360,8 @@ export function useConversation(
     ttsSpeaking,
     npcVoice,
     setNpcVoice,
+    banterModelId,
+    setBanterModelId,
     enableVoice,
     disableVoice,
     setMicMode,
