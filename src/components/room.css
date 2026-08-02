@@ -619,7 +619,14 @@
   align-items: center;
   justify-content: center;
   background: radial-gradient(ellipse 60% 50% at 50% 45%, rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.6));
-  animation: banner-in 600ms ease backwards;
+  /* Opacity-only fade: banner-in's translate(-50%) is for left:50% centered
+     elements and would shove this full-screen overlay off by half the viewport. */
+  animation: overlay-fade 600ms ease backwards;
+}
+
+@keyframes overlay-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .intro-card {

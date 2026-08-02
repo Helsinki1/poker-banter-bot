@@ -116,6 +116,18 @@
   .legend { display: flex; gap: 22px; margin-top: 24px; font-size: 12.5px; color: rgba(255,255,255,.7); flex-wrap: wrap; }
   .legend .dot { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 7px; vertical-align: middle; }
 
+  /* ---------------- RESULTS TABLE ---------------- */
+  .results { width: 100%; max-width: 720px; margin: 8px auto 0; border-collapse: collapse; overflow: hidden; border-radius: 14px; box-shadow: 0 6px 16px rgba(0,0,0,.25); }
+  .results th, .results td { padding: 16px 22px; text-align: center; font-size: 17px; }
+  .results thead th { background: rgba(255,255,255,.06); color: var(--gold-soft); font-weight: 800; letter-spacing: .02em; border-bottom: 1px solid rgba(232,196,119,.35); }
+  .results thead th.lora { color: #35270a; background: linear-gradient(90deg, var(--gold) 0%, #d8ad5a 100%); }
+  .results tbody th { text-align: left; font-weight: 700; color: #f4f1e9; background: rgba(255,255,255,.04); font-size: 14px; letter-spacing: .06em; text-transform: uppercase; }
+  .results tbody td { color: rgba(255,255,255,.85); font-weight: 700; background: rgba(255,255,255,.03); }
+  .results tbody td.lora { color: var(--gold); font-weight: 900; background: rgba(232,196,119,.10); }
+  .results tbody tr + tr th, .results tbody tr + tr td { border-top: 1px solid rgba(255,255,255,.07); }
+  .results-note { max-width: 720px; margin: 14px auto 0; text-align: center; font-size: 13px; color: rgba(255,255,255,.6); }
+  @media (max-width: 1000px) { .results th, .results td { padding: 12px 12px; font-size: 15px; } }
+
   footer { text-align: center; padding: 40px 32px 60px; color: rgba(255,255,255,.5); font-size: 13px; }
   footer .suit { color: var(--gold); letter-spacing: .2em; font-size: 16px; }
 
@@ -208,13 +220,8 @@
       <div class="node" style="width:320px;">
         <span class="eyebrow">Benchmark</span>
         <h3>GTO Solver Eval</h3>
-        <p>Score tuned vs. base model against a GTO solver — did it pick the correct, game-theory-optimal spot?</p>
+        <p>Score tuned vs. base Kimi K2.6 against the GTO ground truth — did it pick the correct, game-theory-optimal spot?</p>
       </div>
-    </div>
-
-    <div class="banner">
-      <span class="big">+31%</span>
-      <span class="txt"><b>more correct spots vs. base</b> — measured against a GTO solver on held-out hands.</span>
     </div>
 
     <div class="legend">
@@ -226,9 +233,38 @@
   </div>
 </section>
 
+<!-- ===================== RESULTS TABLE ===================== -->
+<section class="wrap" style="padding-top: 40px; padding-bottom: 20px;">
+  <div class="sec-head" style="text-align:center;">
+    <p class="kicker">GTO Ground Truth Eval</p>
+    <h2>Base Kimi K2.6 <span class="thin">vs. + PokerBench LoRA</span></h2>
+  </div>
+
+  <table class="results">
+    <thead>
+      <tr>
+        <th></th>
+        <th>base Kimi K2.6</th>
+        <th class="lora">+ PokerBench LoRA</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <th>exact</th>
+        <td>40.0%</td>
+        <td class="lora">71.7%</td>
+      </tr>
+      <tr>
+        <th>verb-only</th>
+        <td>45.0%</td>
+        <td class="lora">73.3%</td>
+      </tr>
+    </tbody>
+  </table>
+  </section>
+
 <footer>
   <div class="suit">♠ ♥ ♣ ♦</div>
-  <p>Post-trained open-source LLM · Tinker LoRA · served on Sail Research · +31% across any hand</p>
 </footer>
 
 </body>
