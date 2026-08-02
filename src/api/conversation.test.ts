@@ -73,16 +73,23 @@ describe('MockRealtimeConversationClient', () => {
     expect(finals[0].text.startsWith(partials[0].text)).toBe(true);
   });
 
-  it('streams incremental player transcripts', async () => {
+  it('emits the player transcript immediately as final', async () => {
     await connect();
     await vi.advanceTimersByTimeAsync(6000); // let greeting finish
     const events: { text: string; final: boolean }[] = [];
     client.onPlayerTranscript((e) => events.push(e));
     client.sendPlayerUtterance('you look nervous my friend');
-    await vi.advanceTimersByTimeAsync(1000);
-    expect(events.length).toBe(5);
-    expect(events[events.length - 1].final).toBe(true);
-    expect(events[events.length - 1].text).toBe('you look nervous my friend');
+    // The text is already final when it arrives from STT: it must NOT be
+    // re-streamed word by word, which used to delay the reply ~60ms per word.
+    expect(events).toEqual([{ text: 'you look nervous my friend', final: true }]);
+  });
+
+  it('starts generating a reply without an artificial think delay', async () => {
+    await connect();
+    await vi.advanceTimersByTimeAsync(6000);
+    client.sendPlayerUtterance('you got lucky');
+    // Reply generation begins synchronously — no timer to advance first.
+    expect(['thinking', 'speaking']).toContain(client.getState());
   });
 
   it('interruption cancels the active response and stops its audio', async () => {
@@ -114,7 +121,9 @@ describe('MockRealtimeConversationClient', () => {
     expect(client.getState()).toBe('speaking');
     client.sendPlayerUtterance('hold on');
     await vi.advanceTimersByTimeAsync(50);
-    expect(['interrupted', 'thinking']).toContain(client.getState());
+    // The old response is gone and a new one is already under way — with no
+    // think delay the reply can reach 'speaking' almost immediately.
+    expect(['interrupted', 'thinking', 'speaking']).toContain(client.getState());
     // Eventually a fresh response arrives.
     await vi.advanceTimersByTimeAsync(6000);
     expect(states.filter((s) => s === 'speaking').length).toBeGreaterThanOrEqual(2);
@@ -186,6 +195,81 @@ describe('MockRealtimeConversationClient', () => {
     client.sendPlayerUtterance('what happened last hand');
     await vi.advanceTimersByTimeAsync(8000);
     expect(finals.some((t) => t.includes('Pair of Kings') || t.toLowerCase().includes('last hand'))).toBe(true);
+  });
+
+  it('a speculative utterance stays silent until the turn is confirmed', async () => {
+    await connect();
+    await vi.advanceTimersByTimeAsync(6000);
+    const audio: string[] = [];
+    const transcripts: string[] = [];
+    client.onNpcAudio((e) => { if (e.kind === 'tts' && !e.last) audio.push(e.text); });
+    client.onNpcTranscript((e) => transcripts.push(e.text));
+
+    client.sendSpeculativeUtterance('you think you can beat');
+    await vi.advanceTimersByTimeAsync(2000);
+    // An eager guess must never be heard or shown — the player may still be talking.
+    expect(audio).toHaveLength(0);
+    expect(transcripts).toHaveLength(0);
+    // Nor may it be committed to memory as something the player actually said.
+    expect(client.getMemory().turns.filter((t) => t.speaker === 'player')).toHaveLength(0);
+  });
+
+  it('a retracted speculative utterance leaves no trace', async () => {
+    await connect();
+    await vi.advanceTimersByTimeAsync(6000);
+    client.sendSpeculativeUtterance('wait i am not');
+    client.cancelSpeculativeUtterance();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(client.getMemory().turns.filter((t) => t.speaker === 'player')).toHaveLength(0);
+    expect(client.getState()).not.toBe('speaking');
+  });
+
+  it('a confirmed turn still produces exactly one spoken reply', async () => {
+    await connect();
+    await vi.advanceTimersByTimeAsync(6000);
+    client.sendSpeculativeUtterance('you got lucky there');
+    await vi.advanceTimersByTimeAsync(100);
+    const finals: string[] = [];
+    client.onNpcTranscript((e) => { if (e.final) finals.push(e.text); });
+    // Same text confirmed — the speculative run is promoted, not duplicated.
+    client.sendPlayerUtterance('you got lucky there');
+    await vi.advanceTimersByTimeAsync(8000);
+    expect(finals).toHaveLength(1);
+    const turns = client.getMemory().turns;
+    expect(turns.filter((t) => t.speaker === 'player' && t.text === 'you got lucky there')).toHaveLength(1);
+  });
+
+  it('promoting a speculative reply does not start a second generation', async () => {
+    // Two concurrent streams would interleave two different replies into one
+    // garbled subtitle, and bill for both.
+    const mod = await import('./llmBanter');
+    let calls = 0;
+    const spy = vi.spyOn(mod, 'streamBanterLine').mockImplementation(
+      async function* () {
+        calls++;
+        yield 'Scared money ';
+        yield 'never wins here.';
+      },
+    );
+    try {
+      const c = new MockRealtimeConversationClient({ seed: 11, latencyScale: 1 });
+      await (async () => {
+        const p = c.connect({ opponentId: 'lebron', snapshot: baseSnapshot() });
+        await vi.advanceTimersByTimeAsync(1200);
+        await p;
+      })();
+      await vi.advanceTimersByTimeAsync(6000);
+      const greetingCalls = calls;
+
+      c.sendSpeculativeUtterance('you got lucky there');
+      await vi.advanceTimersByTimeAsync(50);
+      c.sendPlayerUtterance('you got lucky there');
+      await vi.advanceTimersByTimeAsync(8000);
+
+      expect(calls - greetingCalls).toBe(1);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('mic and NPC audio mutes are independent', async () => {

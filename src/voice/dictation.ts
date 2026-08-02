@@ -17,6 +17,14 @@ export interface DictationEvents {
   onInterim(text: string): void;
   /** A finalized utterance, ready to send to the conversation backend. */
   onFinal(text: string): void;
+  /**
+   * The speaker has *probably* finished, but may resume. Lets the backend
+   * start generating early; `onEagerCancel` retracts it if speech continues.
+   * Only emitted by adapters with real turn detection.
+   */
+  onEagerFinal?(text: string): void;
+  /** A prior onEagerFinal was premature — the speaker kept going. */
+  onEagerCancel?(): void;
   onError(message: string, recoverable: boolean): void;
 }
 

@@ -18,13 +18,21 @@ export function getOpenAiApiKey(): string {
   return (import.meta.env.VITE_OPENAI_API_KEY as string | undefined)?.trim() ?? '';
 }
 
-const MODEL = (import.meta.env.VITE_OPENAI_MODEL as string | undefined)?.trim() || 'gpt-5.1';
+// A non-reasoning model is essential here: reasoning models spend hidden
+// tokens before the first visible one, which is dead air at the table. Table
+// talk needs speed, not deliberation.
+const MODEL = (import.meta.env.VITE_OPENAI_MODEL as string | undefined)?.trim() || 'gpt-4.1-mini';
+
+// One line of table talk is capped at 30 words by the prompt; a tight token
+// ceiling bounds the worst case when the model ignores that.
+const MAX_TOKENS = 60;
 
 let client: OpenAI | null = null;
 function getClient(apiKey: string): OpenAI {
   if (!client) {
     // Browser call is intentional: local single-player game, the player's own key.
-    client = new OpenAI({ apiKey, dangerouslyAllowBrowser: true, maxRetries: 1, timeout: 20_000 });
+    // Short timeout: a slow response is worse than a scripted line.
+    client = new OpenAI({ apiKey, dangerouslyAllowBrowser: true, maxRetries: 0, timeout: 8_000 });
   }
   return client;
 }
@@ -127,36 +135,97 @@ function describeContext(snapshot: PublicGameSnapshot | null, memory: Conversati
   return parts.join('\n\n');
 }
 
-/**
- * Generate one banter line. Resolves to null (quickly, no network) when no
- * key is configured; resolves to null on any API failure.
- */
-export async function generateBanterLine(
+function buildMessages(
   characterName: string,
   voice: NpcVoice,
   trigger: NpcTrigger,
   memory: ConversationMemory,
   snapshot: PublicGameSnapshot | null,
-): Promise<string | null> {
+) {
+  return [
+    { role: 'system' as const, content: systemPrompt(characterName, voice) },
+    {
+      role: 'user' as const,
+      content: `${describeContext(snapshot, memory)}\n\nSITUATION: ${describeTrigger(trigger)}\n\nYour single line of table talk:`,
+    },
+  ];
+}
+
+/** Leading quotes/markdown the model sometimes opens with, stripped as deltas arrive. */
+function stripLeadingJunk(text: string): string {
+  return text.replace(/^["'“‘*\s]+/, '');
+}
+
+/**
+ * Stream one banter line as text deltas. Yields nothing (and returns
+ * immediately, no network) when no key is configured, so callers fall through
+ * to the scripted line.
+ *
+ * Deltas are cleaned incrementally: wrapping quotes are stripped and anything
+ * after a newline is dropped, because the caller feeds these straight into TTS
+ * and cannot un-speak a stray quotation mark.
+ */
+export async function* streamBanterLine(
+  characterName: string,
+  voice: NpcVoice,
+  trigger: NpcTrigger,
+  memory: ConversationMemory,
+  snapshot: PublicGameSnapshot | null,
+  signal?: AbortSignal,
+): AsyncGenerator<string, void, void> {
   const apiKey = getOpenAiApiKey();
-  if (!apiKey) return null;
+  if (!apiKey) return;
+
+  let stream;
   try {
-    const completion = await getClient(apiKey).chat.completions.create({
+    stream = await getClient(apiKey).chat.completions.create({
       model: MODEL,
-      max_completion_tokens: 400,
-      messages: [
-        { role: 'system', content: systemPrompt(characterName, voice) },
-        {
-          role: 'user',
-          content: `${describeContext(snapshot, memory)}\n\nSITUATION: ${describeTrigger(trigger)}\n\nYour single line of table talk:`,
-        },
-      ],
-    });
-    const text = completion.choices[0]?.message?.content?.trim();
-    if (!text) return null;
-    // Defensive cleanup: strip wrapping quotes and keep it to one line.
-    return text.replace(/^["'“]+|["'”]+$/g, '').split('\n')[0].slice(0, 240);
+      max_completion_tokens: MAX_TOKENS,
+      stream: true,
+      messages: buildMessages(characterName, voice, trigger, memory, snapshot),
+    }, { signal });
   } catch {
-    return null; // scripted lines carry the conversation
+    return; // scripted lines carry the conversation
   }
+
+  let emitted = 0;
+  let sawText = false;
+  try {
+    for await (const part of stream) {
+      if (signal?.aborted) return;
+      let delta = part.choices[0]?.delta?.content ?? '';
+      if (!delta) continue;
+      if (!sawText) {
+        delta = stripLeadingJunk(delta);
+        if (!delta) continue;
+        sawText = true;
+      }
+      // One line only: stop at the first newline the model produces.
+      const newline = delta.search(/[\r\n]/);
+      if (newline !== -1) {
+        const head = delta.slice(0, newline);
+        if (head) yield head;
+        return;
+      }
+      // Hard length ceiling, matching the non-streaming behaviour.
+      if (emitted + delta.length > 240) {
+        const head = delta.slice(0, 240 - emitted);
+        if (head) yield head;
+        return;
+      }
+      emitted += delta.length;
+      yield delta;
+    }
+  } catch {
+    return; // partial text already spoken is fine; the line just ends early
+  }
+}
+
+/**
+ * Trailing quote/asterisk cleanup for a fully assembled line. The streaming
+ * path cannot do this (it would have to withhold the last delta), so the
+ * assembled text is cleaned once at the end for the transcript.
+ */
+export function cleanAssembledLine(text: string): string {
+  return text.replace(/^["'“‘*\s]+|["'”’*\s]+$/g, '').slice(0, 240);
 }

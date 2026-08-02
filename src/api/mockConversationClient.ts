@@ -8,7 +8,8 @@ import {
   emptyMemory, generateNpcLine, rememberHand, rememberTurn, VOICE_PROFILES,
   type ConversationMemory, type NpcTrigger,
 } from './npcScript';
-import { generateBanterLine } from './llmBanter';
+import { streamBanterLine, cleanAssembledLine } from './llmBanter';
+import { TextChunker } from '../voice/chunker';
 import { CHARACTER_MAP } from '../characters/data';
 import type { NpcVoice } from '../voice/cartesiaTts';
 
@@ -34,6 +35,31 @@ function sub<T>(e: Emitter<T>, cb: (v: T) => void): Unsubscribe {
   return () => e.listeners.delete(cb);
 }
 
+interface ActiveResponse {
+  id: string;
+  timers: ReturnType<typeof setTimeout>[];
+  snapshotHandId: string;
+  street: string | null;
+  /** Aborts the in-flight LLM stream on barge-in or a stale-context cancel. */
+  controller: AbortController;
+}
+
+/**
+ * A reply generated during the turn.eager_end window, before the player's turn
+ * was confirmed. Buffered, never audible, and discarded if speech resumes.
+ */
+interface SpeculativeResponse {
+  id: string;
+  text: string;
+  controller: AbortController;
+  /** Deltas received so far, consumed in order once promoted. */
+  deltas: string[];
+  done: boolean;
+  failed: boolean;
+  /** Wakes a promoted consumer waiting on the next delta. */
+  notify: (() => void) | null;
+}
+
 export interface MockConversationOptions {
   seed?: number;
   /** Base latency scale; 0 makes everything immediate (tests). */
@@ -54,7 +80,10 @@ export class MockRealtimeConversationClient implements RealtimeConversationClien
   private latencyScale: number;
   private dropRate: number;
   private responseCounter = 0;
-  private activeResponse: { id: string; timers: ReturnType<typeof setTimeout>[]; snapshotHandId: string; street: string | null } | null = null;
+  private activeResponse: ActiveResponse | null = null;
+  private speculative: SpeculativeResponse | null = null;
+  /** A speculative response whose turn was confirmed and is now being spoken. */
+  private promoted: SpeculativeResponse | null = null;
   private lastResultHand = 0;
 
   private playerTranscriptE = emitter<TranscriptEvent>();
@@ -83,6 +112,9 @@ export class MockRealtimeConversationClient implements RealtimeConversationClien
 
   async disconnect(): Promise<void> {
     this.cancelCurrentResponse();
+    this.discardSpeculative();
+    for (const t of this.activeTimersMisc) clearTimeout(t);
+    this.activeTimersMisc = [];
     this.context = null;
     this.setState('disconnected');
   }
@@ -160,27 +192,111 @@ export class MockRealtimeConversationClient implements RealtimeConversationClien
     if (!trimmed) return;
     // Barge-in: a new player utterance interrupts any current NPC response.
     if (this.activeResponse) this.interruptNpc();
+
+    // If a speculative response for this exact text is already in flight, keep
+    // it — it has a head start of however long the eager window lasted.
+    if (this.speculative?.text === trimmed) {
+      const promoted = this.speculative;
+      this.speculative = null;
+      rememberTurn(this.memory, 'player', trimmed);
+      emit(this.playerTranscriptE, { text: trimmed, final: true });
+      this.promoteSpeculative(promoted);
+      return;
+    }
+    this.discardSpeculative();
+
     rememberTurn(this.memory, 'player', trimmed);
-    // Stream the "incremental transcription" of the utterance word by word.
-    const words = trimmed.split(/\s+/);
-    let acc = '';
-    words.forEach((w, i) => {
-      const t = setTimeout(() => {
-        acc = acc ? `${acc} ${w}` : w;
-        emit(this.playerTranscriptE, { text: acc, final: i === words.length - 1 });
-        if (i === words.length - 1) {
-          this.scheduleResponse({ kind: 'player-utterance', text: trimmed }, 150);
-        }
-      }, i * 60 * this.latencyScale);
-      this.activeTimersMisc.push(t);
-    });
+    // The transcript is already final — emit it as-is. (It used to be replayed
+    // word-by-word on a timer, which delayed the reply by ~60ms per word.)
+    emit(this.playerTranscriptE, { text: trimmed, final: true });
+    // No artificial think delay: a reply to speech should start immediately.
+    this.scheduleResponse({ kind: 'player-utterance', text: trimmed }, 0);
+  }
+
+  /**
+   * Cartesia thinks the player has probably stopped talking. Start generating
+   * now, but do not commit it to memory or emit a transcript — `turn.resume`
+   * may retract this, and `sendPlayerUtterance` promotes it if confirmed.
+   */
+  sendSpeculativeUtterance(text: string): void {
+    if (!this.context || this.state === 'disconnected' || this.state === 'connecting') return;
+    const trimmed = text.trim();
+    if (!trimmed || this.speculative?.text === trimmed) return;
+    this.discardSpeculative();
+    // Never barge in on the NPC for a guess — only a confirmed turn does that.
+    if (this.activeResponse) return;
+
+    const id = `resp-${++this.responseCounter}`;
+    const controller = new AbortController();
+    this.speculative = {
+      id, text: trimmed, controller, deltas: [], done: false, failed: false, notify: null,
+    };
+    void this.bufferSpeculative(this.speculative, trimmed, controller);
+  }
+
+  /** The eager guess was wrong — the player kept talking. */
+  cancelSpeculativeUtterance(): void {
+    this.discardSpeculative();
+  }
+
+  private discardSpeculative(): void {
+    if (!this.speculative) return;
+    this.speculative.controller.abort();
+    this.speculative = null;
+  }
+
+  /**
+   * Generate a speculative reply into a queue rather than to the speakers.
+   * Nothing is heard unless the turn is confirmed. Once promoted, the SAME
+   * stream keeps filling the queue and the consumer drains it — the request is
+   * never reissued, so the head start is kept and tokens are not paid twice.
+   */
+  private async bufferSpeculative(
+    spec: SpeculativeResponse,
+    text: string,
+    controller: AbortController,
+  ): Promise<void> {
+    if (!this.context) return;
+    const opponentId = this.context.opponentId;
+    const stillWanted = () => this.speculative === spec || this.promoted === spec;
+    try {
+      const stream = streamBanterLine(
+        CHARACTER_MAP[opponentId].name, this.npcVoice,
+        { kind: 'player-utterance', text }, this.memory, this.snapshot, controller.signal,
+      );
+      for await (const delta of stream) {
+        if (!stillWanted()) return; // retracted or superseded
+        spec.deltas.push(delta);
+        spec.notify?.();
+      }
+    } catch {
+      spec.failed = true;
+    } finally {
+      spec.done = true;
+      spec.notify?.();
+    }
+  }
+
+  /** Drain a promoted speculative stream as an async iterator. */
+  private async *drainSpeculative(spec: SpeculativeResponse): AsyncGenerator<string, void, void> {
+    let i = 0;
+    for (;;) {
+      while (i < spec.deltas.length) yield spec.deltas[i++];
+      if (spec.done) return;
+      // Wait for the producer to push more (or finish).
+      await new Promise<void>((resolve) => { spec.notify = resolve; });
+      spec.notify = null;
+    }
   }
 
   interruptNpc(): void {
     if (!this.activeResponse) return;
     this.clearResponseTimers();
     const id = this.activeResponse.id;
+    // Stop paying for tokens nobody will hear.
+    this.activeResponse.controller.abort();
     this.activeResponse = null;
+    this.releasePromoted();
     // Cancelled audio must stop: signal a final empty audio chunk.
     emit(this.npcAudioE, { kind: 'tts', responseId: id, text: '', voice: this.voice(), last: true, cancelled: true });
     this.setState('interrupted');
@@ -259,48 +375,40 @@ export class MockRealtimeConversationClient implements RealtimeConversationClien
     const id = `resp-${++this.responseCounter}`;
     const opponentId = this.context.opponentId;
 
-    const response = {
+    const response: ActiveResponse = {
       id,
-      timers: [] as ReturnType<typeof setTimeout>[],
+      timers: [],
       snapshotHandId: this.snapshot?.handId ?? '',
       street: this.snapshot?.street ?? null,
+      controller: new AbortController(),
     };
     this.activeResponse = response;
     this.setState('thinking');
 
-    // "Thinking" covers the LLM round trip; the scripted line is the
-    // guaranteed fallback so the table never goes silent.
-    response.timers.push(setTimeout(() => {
+    // thinkMs is deliberate pacing for unprompted commentary (a beat after the
+    // flop feels human). Replies to the player use 0 — every ms is dead air.
+    const startNow = thinkMs <= 0;
+    const begin = () => {
       if (this.activeResponse?.id !== id) return;
-      void this.speakResponse(id, response, opponentId, trigger);
-    }, thinkMs * this.latencyScale));
+      void this.speakStream(id, response, opponentId, trigger);
+    };
+    if (startNow) begin();
+    else response.timers.push(setTimeout(begin, thinkMs * this.latencyScale));
   }
 
-  private async speakResponse(
-    id: string,
-    response: { id: string; timers: ReturnType<typeof setTimeout>[] },
-    opponentId: OpponentId,
-    trigger: NpcTrigger,
-  ): Promise<void> {
-    let line: string | null = null;
-    try {
-      line = await generateBanterLine(
-        CHARACTER_MAP[opponentId].name, this.npcVoice, trigger, this.memory, this.snapshot,
-      );
-    } catch {
-      line = null;
-    }
-    if (this.activeResponse?.id !== id) return; // interrupted while generating
-    if (!line) line = generateNpcLine(opponentId, trigger, this.memory, this.snapshot, this.rng);
+  /**
+   * Speak a fully-known scripted line. Used when the LLM is unavailable: the
+   * whole text goes to TTS at once, and because that path (speechSynthesis)
+   * reports no word timings, the transcript is revealed on timers so subtitles
+   * still read at a human pace instead of appearing all at once.
+   */
+  private speakScriptedLine(id: string, response: ActiveResponse, line: string): void {
     rememberTurn(this.memory, 'npc', line);
-
     this.setState('speaking');
-    // Audio begins with the FIRST safe chunk, before full text exists.
     if (this.npcAudioEnabled) {
       emit(this.npcAudioE, { kind: 'tts', responseId: id, text: line, voice: this.voice(), last: false });
     }
 
-    // Stream text word by word.
     const words = line.split(/\s+/);
     let elapsed = 0;
     let acc = '';
@@ -313,15 +421,120 @@ export class MockRealtimeConversationClient implements RealtimeConversationClien
       }, elapsed));
     });
 
-    // Completion.
-    const finalLine = line;
     elapsed += 120 * this.latencyScale;
     response.timers.push(setTimeout(() => {
       if (this.activeResponse?.id !== id) return;
-      emit(this.npcTranscriptE, { text: finalLine, final: true, responseId: id });
+      emit(this.npcTranscriptE, { text: line, final: true, responseId: id });
       emit(this.npcAudioE, { kind: 'tts', responseId: id, text: '', voice: this.voice(), last: true });
       this.activeResponse = null;
+      this.releasePromoted();
       this.setState(this.micEnabled ? 'listening' : 'connected');
     }, elapsed));
+  }
+
+  /** Detach a promoted speculative stream once its response is over. */
+  private releasePromoted(): void {
+    if (!this.promoted) return;
+    this.promoted.controller.abort();
+    this.promoted.notify?.();
+    this.promoted = null;
+  }
+
+  /**
+   * Adopt an already-buffered speculative response. Its generation started
+   * during the eager-end window, so first audio can be nearly instant.
+   */
+  private promoteSpeculative(spec: SpeculativeResponse): void {
+    if (!this.context) return;
+    const response = {
+      id: spec.id,
+      timers: [] as ReturnType<typeof setTimeout>[],
+      snapshotHandId: this.snapshot?.handId ?? '',
+      street: this.snapshot?.street ?? null,
+      controller: spec.controller,
+    };
+    this.activeResponse = response;
+    this.promoted = spec;
+
+    // Whatever was buffered is spoken immediately; the rest of the stream (if
+    // still open) continues to flow through the same chunker.
+    void this.speakStream(spec.id, response, this.context.opponentId,
+      { kind: 'player-utterance', text: spec.text }, spec);
+  }
+
+  /**
+   * Stream one NPC response: LLM deltas → sentence fragments → TTS, with the
+   * transcript following the same fragments. Nothing waits for the full line.
+   */
+  private async speakStream(
+    id: string,
+    response: ActiveResponse,
+    opponentId: OpponentId,
+    trigger: NpcTrigger,
+    adopted?: SpeculativeResponse,
+  ): Promise<void> {
+    const chunker = new TextChunker();
+    let assembled = '';
+    let spokeAnything = false;
+
+    const shipFragment = (fragment: string) => {
+      if (!fragment) return;
+      if (!spokeAnything) {
+        spokeAnything = true;
+        this.setState('speaking');
+      }
+      assembled = assembled ? `${assembled} ${fragment}` : fragment;
+      if (this.npcAudioEnabled) {
+        emit(this.npcAudioE, {
+          kind: 'tts', responseId: id, text: fragment, voice: this.voice(), last: false,
+        });
+      }
+      // Transcript mirrors what has been sent to the synthesizer. When audio is
+      // playing, the player re-paces this against real word timings.
+      emit(this.npcTranscriptE, { text: assembled, final: false, responseId: id });
+    };
+
+    try {
+      // A promoted speculative response continues its EXISTING stream — issuing
+      // a second request here would interleave two different replies.
+      const stream = adopted
+        ? this.drainSpeculative(adopted)
+        : streamBanterLine(
+          CHARACTER_MAP[opponentId].name, this.npcVoice, trigger,
+          this.memory, this.snapshot, response.controller.signal,
+        );
+      for await (const delta of stream) {
+        if (this.activeResponse?.id !== id) return; // interrupted mid-stream
+        for (const fragment of chunker.push(delta)) shipFragment(fragment);
+      }
+      const tail = chunker.flush();
+      if (tail) {
+        if (this.activeResponse?.id !== id) return;
+        shipFragment(tail);
+      }
+    } catch {
+      // Fall through: partial text already spoken stands on its own.
+    }
+
+    if (this.activeResponse?.id !== id) return;
+
+    // Nothing came back (no key, aborted, or API failure) — the scripted line
+    // guarantees the table never goes silent. It takes the non-streamed path:
+    // the full text is known at once and there are no word timestamps to pace
+    // subtitles against, so the transcript is paced on timers instead.
+    if (!assembled) {
+      const scripted = generateNpcLine(opponentId, trigger, this.memory, this.snapshot, this.rng);
+      this.speakScriptedLine(id, response, scripted);
+      return;
+    }
+
+    const finalLine = cleanAssembledLine(assembled);
+    rememberTurn(this.memory, 'npc', finalLine);
+    emit(this.npcTranscriptE, { text: finalLine, final: true, responseId: id });
+    // Closes the TTS context; queued audio finishes playing on its own.
+    emit(this.npcAudioE, { kind: 'tts', responseId: id, text: '', voice: this.voice(), last: true });
+    this.activeResponse = null;
+    this.releasePromoted();
+    this.setState(this.micEnabled ? 'listening' : 'connected');
   }
 }
