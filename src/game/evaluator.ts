@@ -20,6 +20,8 @@ export interface HandRank {
   score: number;
   category: number;
   name: string;
+  /** The exact five cards this rank was computed from. */
+  cards: Card[];
 }
 
 function pack(category: number, ranks: number[]): number {
@@ -117,14 +119,14 @@ function nameFor(category: number, detail: number[]): string {
 /** Evaluate the best 5-card hand from 5, 6 or 7 cards. */
 export function evaluateHand(cards: Card[]): HandRank {
   if (cards.length < 5) throw new Error(`evaluateHand needs at least 5 cards, got ${cards.length}`);
-  let best: { score: number; category: number; detail: number[] } | null = null;
+  let best: { score: number; category: number; detail: number[]; cards: Card[] } | null = null;
   const n = cards.length;
   const combo: Card[] = [];
   // Enumerate all 5-card subsets.
   const pick = (start: number) => {
     if (combo.length === 5) {
       const s = score5(combo);
-      if (!best || s.score > best.score) best = s;
+      if (!best || s.score > best.score) best = { ...s, cards: [...combo] };
       return;
     }
     for (let i = start; i <= n - (5 - combo.length); i++) {
@@ -134,6 +136,6 @@ export function evaluateHand(cards: Card[]): HandRank {
     }
   };
   pick(0);
-  const b = best as unknown as { score: number; category: number; detail: number[] };
-  return { score: b.score, category: b.category, name: nameFor(b.category, b.detail) };
+  const b = best as unknown as { score: number; category: number; detail: number[]; cards: Card[] };
+  return { score: b.score, category: b.category, name: nameFor(b.category, b.detail), cards: b.cards };
 }

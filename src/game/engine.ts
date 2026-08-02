@@ -237,6 +237,8 @@ function resolveShowdown(s: EngineState): EngineState {
     winner,
     playerHandName: playerRank.name,
     opponentHandName: opponentRank.name,
+    playerBestFive: playerRank.cards,
+    opponentBestFive: opponentRank.cards,
     reason: 'showdown',
     potWon: potTotal,
   };

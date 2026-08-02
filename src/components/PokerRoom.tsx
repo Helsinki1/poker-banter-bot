@@ -6,7 +6,7 @@ import type { ConversationController } from '../state/useConversation';
 import type { VoiceDemo } from '../scenes';
 import EinsteinSprite from '../sprites/EinsteinSprite';
 import LebronSprite from '../sprites/LebronSprite';
-import NegreanuSprite from '../sprites/NegreanuSprite';
+import TrumpSprite from '../sprites/TrumpSprite';
 import DealerSprite from '../sprites/DealerSprite';
 import { ChipStackArt, DealerButtonArt } from '../sprites/ChipArt';
 import type { OpponentSpriteProps, SpriteMood } from '../sprites/types';
@@ -18,7 +18,7 @@ import './room.css';
 const SPRITES: Record<OpponentId, (p: OpponentSpriteProps) => React.ReactElement> = {
   einstein: EinsteinSprite,
   lebron: LebronSprite,
-  negreanu: NegreanuSprite,
+  trump: TrumpSprite,
 };
 
 interface Props {
@@ -91,6 +91,20 @@ export default function PokerRoom({ opponentId, match, convo, voiceDemo, onLeave
   const potAward = phase === 'pot-award';
   const winner = snap?.handResult?.winner;
 
+  // At showdown, light up the exact five cards the result was scored on —
+  // the table itself proves the banner text.
+  const resultShown = phase === 'showdown' || potAward || handDone;
+  const winningFive = resultShown && snap?.handResult?.reason === 'showdown'
+    ? (snap.handResult.winner === 'opponent'
+      ? snap.handResult.opponentBestFive
+      : snap.handResult.playerBestFive) ?? null
+    : null;
+  const winningKeys = winningFive ? new Set(winningFive.map((c) => `${c.rank}${c.suit}`)) : null;
+  const markCard = (card: { rank: number; suit: string }) => ({
+    highlight: winningKeys?.has(`${card.rank}${card.suit}`) ?? false,
+    dim: winningKeys ? !winningKeys.has(`${card.rank}${card.suit}`) : false,
+  });
+
   return (
     <div className={`room${entered ? ' entered' : ''}`} data-phase={phase}>
       <div className="room-walls" />
@@ -123,8 +137,8 @@ export default function PokerRoom({ opponentId, match, convo, voiceDemo, onLeave
             holds its own face-down cards during the hand). */}
         {snap?.opponentCards && snap.opponentCards.length === 2 && phase !== 'resetting-hand' && (
           <div className="opp-cards">
-            <CardView card={snap.opponentCards[0]} width={44} deal="opponent" delayMs={100} />
-            <CardView card={snap.opponentCards[1]} width={44} deal="opponent" delayMs={280} />
+            <CardView card={snap.opponentCards[0]} width={44} deal="opponent" delayMs={100} {...markCard(snap.opponentCards[0])} />
+            <CardView card={snap.opponentCards[1]} width={44} deal="opponent" delayMs={280} {...markCard(snap.opponentCards[1])} />
           </div>
         )}
       </div>
@@ -183,7 +197,7 @@ export default function PokerRoom({ opponentId, match, convo, voiceDemo, onLeave
             return (
               <div key={i} className="board-slot">
                 {card
-                  ? <CardView card={card} width={56} deal={isNew ? 'board' : null} delayMs={isNew ? (i - (snap!.communityCards.length - boardNew)) * 220 : 0} />
+                  ? <CardView card={card} width={56} deal={isNew ? 'board' : null} delayMs={isNew ? (i - (snap!.communityCards.length - boardNew)) * 220 : 0} {...markCard(card)} />
                   : <div className="slot-ghost" />}
               </div>
             );
@@ -202,7 +216,7 @@ export default function PokerRoom({ opponentId, match, convo, voiceDemo, onLeave
         )}
         <div className="player-cards" data-testid="player-cards">
           {snap?.playerCards.map((card, i) => (
-            <CardView key={`${snap.handId}-${i}`} card={card} width={74} deal="player" delayMs={i * 240} />
+            <CardView key={`${snap.handId}-${i}`} card={card} width={74} deal="player" delayMs={i * 240} {...markCard(card)} />
           ))}
         </div>
         <div className="seat-plaque player-plaque">

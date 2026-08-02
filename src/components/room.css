@@ -309,6 +309,24 @@
 
 .cardv svg { display: block; filter: drop-shadow(0 4px 5px rgba(0, 0, 0, 0.45)); }
 
+/* Showdown proof: the five cards the result was scored on glow; the rest recede. */
+.cardv.card-highlight { z-index: 2; }
+.cardv.card-highlight .cardv-inner {
+  outline: 2px solid #e8c35a;
+  outline-offset: 1px;
+  border-radius: 3px;
+  box-shadow: 0 0 10px 2px rgba(232, 195, 90, 0.55);
+  animation: card-won-pulse 1.4s ease-in-out infinite;
+}
+.cardv.card-dim { opacity: 0.5; filter: saturate(0.55); transition: opacity 0.35s ease; }
+@keyframes card-won-pulse {
+  0%, 100% { box-shadow: 0 0 10px 2px rgba(232, 195, 90, 0.55); }
+  50% { box-shadow: 0 0 16px 4px rgba(232, 195, 90, 0.8); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cardv.card-highlight .cardv-inner { animation: none; }
+}
+
 .card-highlight { filter: drop-shadow(0 0 10px rgba(242, 194, 107, 0.7)); }
 .card-dim { opacity: 0.55; }
 

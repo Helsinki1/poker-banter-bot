@@ -79,10 +79,10 @@ export function CardFace({
   const color = suit === 'h' || suit === 'd' ? OXBLOOD : CHARCOAL;
   const glyph = RANK_GLYPHS[rank] ?? GLYPH_A;
   const pip = SUIT_GRIDS[suit];
-  const corner = [
-    ...gridRects(glyph, 3, 3, 2, color, 'rk'),
-    ...gridRects(pip, 3, 15, 1, color, 'sp'),
-  ];
+  // Single UPRIGHT corner index only. The traditional second, 180°-rotated
+  // index is a misread trap in pixel art (a rotated 6 is exactly a 9, a
+  // rotated Q is unreadable), and these cards are never viewed upside down.
+  const glyphCols = glyph[0].length;
   return (
     <svg
       viewBox="0 0 40 56"
@@ -93,12 +93,12 @@ export function CardFace({
     >
       <rect x={0} y={0} width={40} height={56} fill={CHARCOAL} />
       <rect x={1} y={1} width={38} height={54} fill={PARCH} />
-      {corner}
-      <g transform="rotate(180 20 28)">
-        {gridRects(glyph, 3, 3, 2, color, 'rk2')}
-        {gridRects(pip, 3, 15, 1, color, 'sp2')}
-      </g>
-      {gridRects(pip, 9, 18, 3, color, 'ctr')}
+      {/* big rank glyph, top-left */}
+      {gridRects(glyph, 3, 3, 3, color, 'rk')}
+      {/* suit pip beside the rank so rank+suit read as one unit */}
+      {gridRects(pip, Math.min(31, 5 + glyphCols * 3), 6, 1, color, 'sp')}
+      {/* large centre pip, lower half */}
+      {gridRects(pip, 9, 26, 3, color, 'ctr')}
     </svg>
   );
 }
