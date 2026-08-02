@@ -24,17 +24,20 @@ const CARTESIA_BASE = 'https://api.cartesia.ai';
 const SPEECH_SPEED = 'fast' as const;
 const VOICE_ID_CACHE_KEY = 'cartesia-voice-ids-v1';
 
-export type NpcVoice = 'normal' | 'lebron' | 'trump';
+export type NpcVoice = 'normal' | 'dana' | 'lebron' | 'trump';
 
 export interface NpcVoiceOption {
   id: NpcVoice;
   label: string;
   /** Name candidates to match against the Cartesia voice library, in order. */
   libraryNames: string[];
+  /** Cartesia speech speed for this voice; defaults to SPEECH_SPEED. */
+  speed?: 'slow' | 'normal' | 'fast';
 }
 
 export const NPC_VOICE_OPTIONS: NpcVoiceOption[] = [
   { id: 'normal', label: 'Normal (Daniel)', libraryNames: ['Daniel - Modern Assistant', 'Daniel (Modern Assistant)', 'Daniel'] },
+  { id: 'dana', label: 'Dana Schafer-Smith', libraryNames: ['Dana Schafer-Smith', 'Dana Schafer Smith', 'Dana'], speed: 'slow' },
   { id: 'lebron', label: 'Lebron James', libraryNames: ['Lebron James', 'Lebron'] },
   // The library entry is literally named "Trump" — keep both spellings.
   { id: 'trump', label: 'Donald Trump', libraryNames: ['Donald Trump', 'Trump'] },
@@ -103,7 +106,7 @@ async function resolveVoiceId(voice: NpcVoiceOption, apiKey: string): Promise<st
   const id = exact ?? partial;
   if (!id) {
     throw new Error(
-      `Voice "${voice.libraryNames[0]}" not found in your Cartesia voice library — add it at play.cartesia.ai.`,
+      `Voice "${voice.libraryNames[0]}" not found in your Cartesia voice library. Add it at play.cartesia.ai.`,
     );
   }
   cache[voice.id] = id;
@@ -320,7 +323,7 @@ export class CartesiaVoicePlayer {
     try {
       const voiceId = await this.resolveVoiceCached(this.voice, apiKey);
       if (this.epoch !== playback.epoch) return; // replaced while resolving
-      await this.getSocket(apiKey).send(playback.responseId, voiceId, fragment, false, SPEECH_SPEED);
+      await this.getSocket(apiKey).send(playback.responseId, voiceId, fragment, false, this.voice.speed ?? SPEECH_SPEED);
     } catch (err) {
       if (this.epoch !== playback.epoch) return;
       const message = err instanceof Error ? err.message : 'Cartesia voice unavailable.';

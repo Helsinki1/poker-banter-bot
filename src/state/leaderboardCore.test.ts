@@ -51,7 +51,7 @@ describe('CSV round-trip', () => {
       'not a row',
       'Eve,unknown-opponent,100,5',
       'Mallory,trump,NaN,5',
-      'Bob,einstein,300,7',
+      'Bob,dana,300,7',
     ].join('\n');
     expect(parseCsv(text).map((x) => x.name)).toEqual(['Ada', 'Bob']);
   });

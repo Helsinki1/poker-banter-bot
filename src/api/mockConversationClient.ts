@@ -325,7 +325,7 @@ export class MockRealtimeConversationClient implements RealtimeConversationClien
   simulateConnectionDrop(): void {
     this.cancelCurrentResponse();
     this.setState('reconnecting');
-    emit(this.errorE, { recoverable: true, message: 'Connection lost — reconnecting…', code: 'connection-lost' });
+    emit(this.errorE, { recoverable: true, message: 'Connection lost, reconnecting…', code: 'connection-lost' });
     const t = setTimeout(() => {
       if (this.context) this.setState(this.micEnabled ? 'listening' : 'connected');
     }, 1500 * this.latencyScale);
@@ -346,7 +346,7 @@ export class MockRealtimeConversationClient implements RealtimeConversationClien
   private activeTimersMisc: ReturnType<typeof setTimeout>[] = [];
 
   private voice() {
-    return VOICE_PROFILES[(this.context?.opponentId ?? 'einstein') as OpponentId];
+    return VOICE_PROFILES[(this.context?.opponentId ?? 'dana') as OpponentId];
   }
 
   private setState(s: NpcConversationState): void {

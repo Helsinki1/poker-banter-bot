@@ -66,37 +66,37 @@ function gameScene(opponentId: OpponentId, scenario: Omit<Scenario, 'seed'>, aut
   return { view: 'room', opponentId, scenario: { seed: SEED, riggedDecks: [DECK_SHOWY], ...scenario }, autoBegin };
 }
 
-const FLOP_SCENE = gameScene('einstein', { script: [oppCall, playerCheck], freezeAt: 'flop-player-action' });
+const FLOP_SCENE = gameScene('dana', { script: [oppCall, playerCheck], freezeAt: 'flop-player-action' });
 
 function voiceScene(demo: VoiceDemo): SceneConfig {
   return { ...FLOP_SCENE, voiceDemo: demo };
 }
 
-const EINSTEIN_LINE = 'The flop changes our little probability space, does it not?';
+const DANA_LINE = 'Ooh, wow! So many cards.';
 
 export const SCENES: Record<string, SceneConfig> = {
   // --- general -------------------------------------------------------------
   'picker': { view: 'picker' },
-  'picker-einstein': { view: 'picker', pickerSelected: 'einstein' },
+  'picker-dana': { view: 'picker', pickerSelected: 'dana' },
   'picker-lebron': { view: 'picker', pickerSelected: 'lebron' },
   'picker-trump': { view: 'picker', pickerSelected: 'trump' },
-  'table-einstein': { view: 'room', opponentId: 'einstein', scenario: { seed: SEED }, autoBegin: false },
+  'table-dana': { view: 'room', opponentId: 'dana', scenario: { seed: SEED }, autoBegin: false },
   'table-lebron': { view: 'room', opponentId: 'lebron', scenario: { seed: SEED }, autoBegin: false },
   'table-trump': { view: 'room', opponentId: 'trump', scenario: { seed: SEED }, autoBegin: false },
-  'shuffling': gameScene('einstein', { freezeAt: 'shuffling' }),
-  'holecards': gameScene('einstein', { freezeAt: 'preflop-opponent-action' }),
+  'shuffling': gameScene('dana', { freezeAt: 'shuffling' }),
+  'holecards': gameScene('dana', { freezeAt: 'preflop-opponent-action' }),
   'opponent-decision': gameScene('trump', { freezeAt: 'preflop-opponent-action' }),
-  'player-decision': gameScene('einstein', { script: [oppCall], freezeAt: 'preflop-player-action' }),
+  'player-decision': gameScene('dana', { script: [oppCall], freezeAt: 'preflop-player-action' }),
   'flop': FLOP_SCENE,
   'flop-lebron': gameScene('lebron', { script: [oppCall, playerCheck], freezeAt: 'flop-player-action' }),
   'flop-trump': gameScene('trump', { script: [oppCall, playerCheck], freezeAt: 'flop-player-action' }),
-  'turn': gameScene('einstein', { script: [oppCall, playerCheck, ...checkStreet], freezeAt: 'turn-player-action' }),
-  'river': gameScene('einstein', { script: [oppCall, playerCheck, ...checkStreet, ...checkStreet], freezeAt: 'river-player-action' }),
-  'showdown': gameScene('einstein', { script: CHECKDOWN, freezeAt: 'showdown', riggedDecks: [DECK_PLAYER_WINS] }),
-  'player-win': gameScene('einstein', { script: CHECKDOWN, freezeAt: 'hand-complete', riggedDecks: [DECK_PLAYER_WINS] }),
+  'turn': gameScene('dana', { script: [oppCall, playerCheck, ...checkStreet], freezeAt: 'turn-player-action' }),
+  'river': gameScene('dana', { script: [oppCall, playerCheck, ...checkStreet, ...checkStreet], freezeAt: 'river-player-action' }),
+  'showdown': gameScene('dana', { script: CHECKDOWN, freezeAt: 'showdown', riggedDecks: [DECK_PLAYER_WINS] }),
+  'player-win': gameScene('dana', { script: CHECKDOWN, freezeAt: 'hand-complete', riggedDecks: [DECK_PLAYER_WINS] }),
   'player-loss': gameScene('lebron', { script: CHECKDOWN, freezeAt: 'hand-complete', riggedDecks: [DECK_OPPONENT_WINS] }),
   'split-pot': gameScene('trump', { script: CHECKDOWN, freezeAt: 'hand-complete', riggedDecks: [DECK_SPLIT] }),
-  'fold-resolution': gameScene('einstein', {
+  'fold-resolution': gameScene('dana', {
     script: [oppCall, { seat: 'player', type: 'raise', amount: 60 }, { seat: 'opponent', type: 'fold' }],
     freezeAt: 'hand-complete',
   }),
@@ -122,30 +122,30 @@ export const SCENES: Record<string, SceneConfig> = {
   }),
   'npc-speaking': voiceScene({
     enabled: true, npcState: 'speaking', micActive: true,
-    subtitle: { text: EINSTEIN_LINE, final: false },
+    subtitle: { text: DANA_LINE, final: false },
   }),
   'player-interrupting': voiceScene({
     enabled: true, npcState: 'interrupted', micActive: true,
-    subtitle: { text: 'The odds of that river card were precisely—', final: true },
-    playerInterim: 'hold on, hold on—',
+    subtitle: { text: 'The odds of that river card were precisely…', final: true },
+    playerInterim: 'hold on, hold on…',
   }),
   'response-cancelled': voiceScene({
     enabled: true, npcState: 'connected', micActive: true, cancelled: true,
-    subtitle: { text: 'The odds of that river card were precisely—', final: true },
+    subtitle: { text: 'The odds of that river card were precisely…', final: true },
   }),
   'mic-muted': voiceScene({ enabled: true, npcState: 'connected', micMuted: true }),
   'npc-muted': voiceScene({
     enabled: true, npcState: 'speaking', micActive: true, npcAudioMuted: true,
-    subtitle: { text: EINSTEIN_LINE, final: false },
+    subtitle: { text: DANA_LINE, final: false },
   }),
   'connection-lost': voiceScene({
     enabled: true, npcState: 'reconnecting',
-    error: { recoverable: true, message: 'Connection lost — reconnecting…', code: 'connection-lost' },
+    error: { recoverable: true, message: 'Connection lost, reconnecting…', code: 'connection-lost' },
   }),
   'reconnecting': voiceScene({ enabled: true, npcState: 'reconnecting' }),
   'voice-error': voiceScene({
     enabled: true, npcState: 'connected',
-    error: { recoverable: true, message: 'Speech recognition error. The game continues — try again or type instead.', code: 'transcription-failed' },
+    error: { recoverable: true, message: 'Speech recognition error. The game continues. Try again or type instead.', code: 'transcription-failed' },
   }),
   'text-fallback': voiceScene({ enabled: true, npcState: 'connected', micMode: 'text-only' }),
 };

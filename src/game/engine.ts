@@ -493,9 +493,9 @@ export function snapshot(s: EngineState): GameSnapshot {
   if (s.handResult) {
     const r = s.handResult;
     if (r.reason === 'fold') {
-      resultText = r.winner === 'player' ? 'Opponent folds — you take the pot.' : 'You fold — opponent takes the pot.';
+      resultText = r.winner === 'player' ? 'Opponent folds. You take the pot.' : 'You fold. Opponent takes the pot.';
     } else if (r.winner === 'split') {
-      resultText = `Split pot — both show ${r.playerHandName}.`;
+      resultText = `Split pot. Both show ${r.playerHandName}.`;
     } else {
       const w = r.winner === 'player' ? 'You win' : 'Opponent wins';
       const hand = r.winner === 'player' ? r.playerHandName : r.opponentHandName;

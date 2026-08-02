@@ -17,7 +17,7 @@ export const MAX_ENTRIES = 25;
 
 export const CSV_HEADER = 'name,opponentId,score,at';
 
-const OPPONENT_IDS: OpponentId[] = ['einstein', 'lebron', 'trump'];
+const OPPONENT_IDS: OpponentId[] = ['dana', 'lebron', 'trump'];
 
 /** Arcade-style name hygiene: no CSV metacharacters, capped length. */
 export function sanitizeName(raw: string): string {

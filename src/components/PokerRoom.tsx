@@ -4,7 +4,7 @@ import { CHARACTER_MAP } from '../characters/data';
 import type { MatchController } from '../state/useMatch';
 import type { ConversationController } from '../state/useConversation';
 import type { VoiceDemo } from '../scenes';
-import EinsteinSprite from '../sprites/EinsteinSprite';
+import DanaSprite from '../sprites/DanaSprite';
 import LebronSprite from '../sprites/LebronSprite';
 import TrumpSprite from '../sprites/TrumpSprite';
 import DealerSprite from '../sprites/DealerSprite';
@@ -17,7 +17,7 @@ import { sanitizeName } from '../state/leaderboardCore';
 import './room.css';
 
 const SPRITES: Record<OpponentId, (p: OpponentSpriteProps) => React.ReactElement> = {
-  einstein: EinsteinSprite,
+  dana: DanaSprite,
   lebron: LebronSprite,
   trump: TrumpSprite,
 };
@@ -45,7 +45,7 @@ function CashOutDialog({ score, onConfirm, onCancel }: {
       <div className="intro-card">
         <span className="intro-name">{score > 0 ? 'Cash Out' : 'Busted'}</span>
         <span className="cashout-score">
-          {score > 0 ? <>You leave with <strong>{score.toLocaleString()}</strong> chips.</> : 'The house keeps everything — but the board remembers.'}
+          {score > 0 ? <>You leave with <strong>{score.toLocaleString()}</strong> chips.</> : 'The house keeps everything, but the board remembers.'}
         </span>
         <input
           className="cashout-input"
@@ -196,7 +196,7 @@ export default function PokerRoom({ opponentId, match, convo, voiceDemo, onLeave
           <span className="sub-text">
             {subtitle.text}
             {!subtitle.final && <span className="sub-caret" />}
-            {(npcState === 'interrupted' || voiceDemo?.cancelled) && <span className="sub-cancelled"> — interrupted</span>}
+            {(npcState === 'interrupted' || voiceDemo?.cancelled) && <span className="sub-cancelled"> (interrupted)</span>}
           </span>
         </div>
       )}
@@ -289,7 +289,7 @@ export default function PokerRoom({ opponentId, match, convo, voiceDemo, onLeave
           )}
           {handDone && snap.opponentRebuyAmount !== undefined && (
             <span className="rebuy-note" data-testid="rebuy-note">
-              {ch.name} is felted — and buys back in for {snap.opponentRebuyAmount.toLocaleString()}.
+              {ch.name} is felted, and buys back in for {snap.opponentRebuyAmount.toLocaleString()}.
             </span>
           )}
           {handDone && !snap.matchOver && (

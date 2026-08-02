@@ -1,0 +1,292 @@
+/* DanaSprite — photo-derived pixel-art opponent.
+   The figure is a quantized bitmap (danaBitmap.ts); animated features are
+   rect overlays keyed off [data-mood] / [data-gaze] on .px-dana.
+   Static posture rules live outside the media query so every mood is
+   still visually differentiated when prefers-reduced-motion is set.
+   Dana is warm and sweet: her resting face already smiles (it's the photo),
+   stars float while she thinks, and her fold is an apologetic tilt. */
+
+.px-dana {
+  display: block;
+  image-rendering: pixelated;
+}
+
+.px-dana g {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* Origin overrides for believable pivots */
+.px-dana .dana-head {
+  transform-origin: 50% 20%;
+}
+.px-dana .dana-eyelids {
+  transform-origin: 50% 0%;
+  transform: scaleY(0);
+}
+
+/* Hidden-by-default pieces */
+.px-dana .dana-mouth-1,
+.px-dana .dana-mouth-2,
+.px-dana .dana-mouth-smile {
+  visibility: hidden;
+}
+.px-dana .dana-fx-stars,
+.px-dana .dana-fx-sparks {
+  opacity: 0;
+}
+
+/* ---------- Static mood posture (motion-safe differentiation) ---------- */
+
+/* thinking: friendly lean, stars appear */
+.px-dana[data-mood='thinking'] .dana-head {
+  transform: translate(1px, 1px) rotate(-1deg);
+}
+.px-dana[data-mood='thinking'] .dana-fx-stars {
+  opacity: 1;
+}
+
+/* listening: lean in warmly */
+.px-dana[data-mood='listening'] .dana-head {
+  transform: translate(-1px, 1px) rotate(-1deg);
+}
+
+/* speaking: reduced-motion fallback shows the half-open frame */
+.px-dana[data-mood='speaking'] .dana-mouth-1 {
+  visibility: visible;
+}
+
+/* suspicious: for Dana it's more of a playful squint */
+.px-dana[data-mood='suspicious'] .dana-browL {
+  transform: translate(1px, 1px) rotate(6deg);
+}
+.px-dana[data-mood='suspicious'] .dana-browR {
+  transform: translate(-1px, 1px) rotate(-6deg);
+}
+.px-dana[data-mood='suspicious'] .dana-eyelids {
+  transform: scaleY(0.55);
+}
+.px-dana[data-mood='suspicious'] .dana-head {
+  transform: translateY(1px) rotate(1deg);
+}
+
+/* surprised: brows up, mouth open */
+.px-dana[data-mood='surprised'] .dana-browL,
+.px-dana[data-mood='surprised'] .dana-browR {
+  transform: translateY(-2px);
+}
+.px-dana[data-mood='surprised'] .dana-eyelids {
+  transform: scaleY(0);
+}
+.px-dana[data-mood='surprised'] .dana-mouth-2 {
+  visibility: visible;
+}
+
+/* smiling moods: the photo already beams — add posture instead */
+.px-dana[data-mood='confident'] .dana-head {
+  transform: translateY(-2px) rotate(-1deg);
+}
+.px-dana[data-mood='amused'] .dana-head {
+  transform: translateY(-1px) rotate(1deg);
+}
+.px-dana[data-mood='celebrating'] .dana-fx-stars,
+.px-dana[data-mood='celebrating'] .dana-fx-sparks {
+  opacity: 1;
+}
+.px-dana[data-mood='winning'] .dana-fx-sparks {
+  opacity: 0.7;
+}
+
+/* frustrated / losing: gentle deflation, sad brows */
+.px-dana[data-mood='frustrated'] .dana-head,
+.px-dana[data-mood='losing'] .dana-head {
+  transform: translateY(2px) rotate(2deg);
+}
+.px-dana[data-mood='frustrated'] .dana-browL,
+.px-dana[data-mood='losing'] .dana-browL {
+  transform: translateY(1px) rotate(-8deg);
+}
+.px-dana[data-mood='frustrated'] .dana-browR,
+.px-dana[data-mood='losing'] .dana-browR {
+  transform: translateY(1px) rotate(8deg);
+}
+.px-dana[data-mood='frustrated'] .dana-torso,
+.px-dana[data-mood='losing'] .dana-torso {
+  transform: translateY(2px);
+}
+
+/* betting / raising: chip stack pushes toward the pot (static fallback) */
+.px-dana[data-mood='betting'] .dana-chips,
+.px-dana[data-mood='raising'] .dana-chips {
+  transform: translate(-2px, 3px);
+}
+
+/* checking / calling: small decisive dip (static fallback) */
+.px-dana[data-mood='checking'] .dana-head,
+.px-dana[data-mood='calling'] .dana-head {
+  transform: translateY(2px);
+}
+
+/* folding: apologetic tilt, slides the cards away */
+.px-dana[data-mood='folding'] .dana-head {
+  transform: translate(2px, 1px) rotate(3deg);
+}
+.px-dana[data-mood='folding'] .dana-cards {
+  transform: translateY(4px);
+}
+
+/* ---------- Animation (respect reduced motion) ---------- */
+@media (prefers-reduced-motion: no-preference) {
+  /* always: breathing + blink */
+  .px-dana .dana-torso {
+    animation: danaBreathe 3s steps(1, end) infinite;
+  }
+  .px-dana .dana-eyelids {
+    animation: danaBlink 4.2s steps(1, end) infinite;
+  }
+  /* keep lids in their posed state for these moods */
+  .px-dana[data-mood='suspicious'] .dana-eyelids,
+  .px-dana[data-mood='surprised'] .dana-eyelids {
+    animation: none;
+  }
+
+  /* thinking: soft sway, stars drift upward */
+  .px-dana[data-mood='thinking'] .dana-head {
+    animation: danaSway 2.8s steps(2, end) infinite;
+  }
+  .px-dana[data-mood='thinking'] .dana-fx-stars {
+    animation: danaStarDrift 2.4s steps(3, end) infinite;
+  }
+
+  /* speaking: mouth frames @ ~180ms, subtle head bob */
+  .px-dana[data-mood='speaking'] .dana-mouth-1 {
+    animation: danaSay1 0.54s steps(1, end) infinite;
+  }
+  .px-dana[data-mood='speaking'] .dana-mouth-2 {
+    animation: danaSay2 0.54s steps(1, end) infinite;
+  }
+  .px-dana[data-mood='speaking'] .dana-head {
+    animation: danaBob 0.54s steps(2, end) infinite;
+  }
+
+  /* amused: warm giggle */
+  .px-dana[data-mood='amused'] .dana-head {
+    animation: danaBob 0.5s steps(2, end) infinite;
+  }
+
+  /* winning: happy bounce */
+  .px-dana[data-mood='winning'] .dana-torso {
+    animation: danaBounce 0.7s steps(2, end) infinite;
+  }
+
+  /* celebrating: everything bounces, stars + sparkles twinkle */
+  .px-dana[data-mood='celebrating'] .dana-torso,
+  .px-dana[data-mood='celebrating'] .dana-cards,
+  .px-dana[data-mood='celebrating'] .dana-chips {
+    animation: danaBounce 0.5s steps(2, end) infinite;
+  }
+  .px-dana[data-mood='celebrating'] .dana-fx-stars,
+  .px-dana[data-mood='celebrating'] .dana-fx-sparks,
+  .px-dana[data-mood='winning'] .dana-fx-sparks {
+    animation: danaTwinkle 0.8s steps(2, end) infinite;
+  }
+
+  /* surprised: quick pop back */
+  .px-dana[data-mood='surprised'] .dana-head {
+    animation: danaPop 0.3s steps(2, end) 1 both;
+  }
+
+  /* frustrated / losing: slow, gentle slump */
+  .px-dana[data-mood='frustrated'] .dana-head,
+  .px-dana[data-mood='losing'] .dana-head {
+    animation: danaSlumpHead 1.4s steps(4, end) 1 forwards;
+  }
+  .px-dana[data-mood='frustrated'] .dana-torso,
+  .px-dana[data-mood='losing'] .dana-torso {
+    animation: danaSlumpTorso 1.4s steps(4, end) 1 forwards;
+  }
+
+  /* betting / raising: chips push toward the pot, then settle */
+  .px-dana[data-mood='betting'] .dana-chips {
+    animation: danaPush 0.7s steps(3, end) 1 both;
+  }
+  .px-dana[data-mood='raising'] .dana-chips {
+    animation: danaPush 0.6s steps(3, end) 2 both;
+  }
+
+  /* checking / calling: friendly nod */
+  .px-dana[data-mood='checking'] .dana-head,
+  .px-dana[data-mood='calling'] .dana-head {
+    animation: danaNod 0.5s steps(2, end) 2 both;
+  }
+
+  /* folding: slide the cards away once */
+  .px-dana[data-mood='folding'] .dana-cards {
+    animation: danaShoveCards 0.8s steps(3, end) 1 forwards;
+  }
+
+  /* ---------- keyframes ---------- */
+  @keyframes danaBreathe {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(1px); }
+  }
+  @keyframes danaBlink {
+    0%, 90% { transform: scaleY(0); }
+    91%, 99% { transform: scaleY(1); }
+    100% { transform: scaleY(0); }
+  }
+  @keyframes danaSway {
+    0%, 100% { transform: translate(1px, 1px) rotate(-1deg); }
+    50% { transform: translate(0, 1px) rotate(0deg); }
+  }
+  @keyframes danaStarDrift {
+    0%, 100% { opacity: 0.45; transform: translateY(0); }
+    50% { opacity: 1; transform: translateY(-2px); }
+  }
+  @keyframes danaSay1 {
+    0%, 66% { visibility: hidden; }
+    33% { visibility: visible; }
+    100% { visibility: hidden; }
+  }
+  @keyframes danaSay2 {
+    0%, 33% { visibility: hidden; }
+    66%, 100% { visibility: visible; }
+  }
+  @keyframes danaBob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(1px); }
+  }
+  @keyframes danaBounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-2px); }
+  }
+  @keyframes danaTwinkle {
+    0%, 100% { opacity: 1; transform: translateY(0); }
+    50% { opacity: 0.3; transform: translateY(-2px); }
+  }
+  @keyframes danaPop {
+    0% { transform: translateY(0); }
+    50% { transform: translateY(-2px); }
+    100% { transform: translateY(-1px); }
+  }
+  @keyframes danaSlumpHead {
+    0% { transform: translateY(0) rotate(0deg); }
+    100% { transform: translateY(2px) rotate(2deg); }
+  }
+  @keyframes danaSlumpTorso {
+    0% { transform: translateY(0); }
+    100% { transform: translateY(1px); }
+  }
+  @keyframes danaPush {
+    0%, 100% { transform: translate(0, 0); }
+    40%, 70% { transform: translate(-3px, 3px); }
+  }
+  @keyframes danaNod {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(2px); }
+  }
+  @keyframes danaShoveCards {
+    0% { transform: translateY(0); }
+    60%, 100% { transform: translateY(4px); }
+  }
+}

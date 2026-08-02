@@ -7,8 +7,8 @@ const base = process.argv[2] ?? 'http://localhost:5173';
 const only = process.argv.slice(3);
 
 const SCENES = [
-  'picker', 'picker-einstein', 'picker-lebron', 'picker-trump',
-  'table-einstein', 'table-lebron', 'table-trump',
+  'picker', 'picker-dana', 'picker-lebron', 'picker-trump',
+  'table-dana', 'table-lebron', 'table-trump',
   'shuffling', 'holecards', 'opponent-decision', 'player-decision',
   'flop', 'flop-lebron', 'flop-trump', 'turn', 'river',
   'showdown', 'player-win', 'player-loss', 'split-pot', 'fold-resolution',

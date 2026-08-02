@@ -203,7 +203,7 @@ export class CartesiaSttAdapter {
           if (text) this.events.onFinal(text);
           break;
         case 'error':
-          this.events.onError('Transcription error — the game continues. Try again or type instead.', true);
+          this.events.onError('Transcription error. The game continues. Try again or type instead.', true);
           break;
       }
     };

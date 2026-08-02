@@ -11,7 +11,7 @@ import { loadSelectedModelId, saveSelectedModelId } from '../api/llmProviders';
 
 /** Each table character speaks with a default voice; the dropdown can override. */
 const CHARACTER_DEFAULT_VOICE: Record<OpponentId, NpcVoice> = {
-  einstein: 'normal',
+  dana: 'dana',
   lebron: 'lebron',
   trump: 'trump',
 };
@@ -114,7 +114,7 @@ export function useConversation(
       onAudioUnavailable: (message) => {
         setError({
           recoverable: true,
-          message: message ?? 'Audio is unavailable — showing subtitles only.',
+          message: message ?? 'Audio is unavailable. Showing subtitles only.',
           code: 'audio-failed',
         });
       },

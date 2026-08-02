@@ -127,7 +127,7 @@ export class DictationAdapter {
           this.wantListening = false;
           this.setStatus('error');
           this.events.onError(
-            "Your browser's speech service is unavailable (network error). Switching to the text box — the game continues.",
+            "Your browser's speech service is unavailable (network error). Switching to the text box. The game continues.",
             false,
           );
         }
@@ -135,7 +135,7 @@ export class DictationAdapter {
         this.consecutiveErrors++;
         if (this.consecutiveErrors >= 3) this.wantListening = false;
         this.setStatus('error');
-        this.events.onError(`Speech recognition error: ${e.error}. The game continues — try again or type instead.`, true);
+        this.events.onError(`Speech recognition error: ${e.error}. The game continues. Try again or type instead.`, true);
       }
     };
     rec.onend = () => {
